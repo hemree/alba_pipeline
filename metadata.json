@@ -1,0 +1,5 @@
+{
+  "name": "Gemini Video Pipeline",
+  "description": "A multi-stage video generation pipeline that uses Gemini to break down a story into scenes and Veo to generate a consistent animated film from the text and character references.",
+  "requestFramePermissions": []
+}
