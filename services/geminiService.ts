@@ -1,8 +1,6 @@
-
-
-
 import { GoogleGenAI, Type } from "@google/genai";
 import type { Scene, Character, VideoModel } from '../types';
+import { buildContinuityPrompt, type GlobalBible } from './continuityPromptBuilder';
 
 const sceneSchema = {
     type: Type.OBJECT,
@@ -92,9 +90,8 @@ export const breakdownStoryIntoScenes = async (story: string, characterDescripti
 export const generateVideoForScene = async (
     scene: Scene,
     characters: Character[],
-    visualStyle: string,
-    narrativeGenre: string,
-    prevSceneContext: string,
+    globalBible: GlobalBible,
+    prevScene: Scene | null,
     onPoll: (operation: any) => void,
     videoModel: VideoModel
 ): Promise<string> => {
@@ -106,17 +103,12 @@ export const generateVideoForScene = async (
         }
         const ai = new GoogleGenAI({ apiKey });
 
+        // Step 1: Build the continuity-aware prompt using the new service
+        const prompt = await buildContinuityPrompt(scene, globalBible, prevScene);
+
+        // Step 2: Find character reference image if applicable
         const sceneCharacterName = scene.characters.length > 0 ? scene.characters[0] : null;
         const characterForImage = sceneCharacterName ? characters.find(c => c.name.toLowerCase() === sceneCharacterName.toLowerCase() && c.imageBase64) : null;
-        
-        const characterPrompts = scene.characters.join(' and ');
-        const prompt = `
-            In a ${visualStyle} style, with the tone of a ${narrativeGenre}.
-            Scene: ${scene.action}.
-            Characters: ${characterPrompts}.
-            Environment: ${scene.environment}.
-            Continuity note: ${prevSceneContext}
-        `;
         
         const imageInput = characterForImage && characterForImage.imageBase64
             ? {
@@ -125,6 +117,7 @@ export const generateVideoForScene = async (
               }
             : undefined;
 
+        // Step 3: Generate video with the rich, consistent prompt
         let operation = await ai.models.generateVideos({
             model: videoModel,
             prompt,

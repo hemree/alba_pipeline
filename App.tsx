@@ -5,6 +5,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 import type { Character, Scene, VideoGenerationStatus, AppStep, VideoModel, TransitionType } from './types';
 import { breakdownStoryIntoScenes, generateVideoForScene } from './services/geminiService';
 import { stitchVideos } from './services/videoStitchingService';
+import type { GlobalBible } from './services/continuityPromptBuilder';
 import CharacterInput from './components/CharacterInput';
 import VideoPlayer from './components/VideoPlayer';
 import Spinner from './components/Spinner';
@@ -147,13 +148,27 @@ const App: React.FC = () => {
         setError(null);
 
         const initialStatuses: VideoGenerationStatus[] = scenes.map((scene, index) => ({
-            sceneIndex: index, // This will be the original index, might need to map to scene.id later
+            sceneIndex: index,
             sceneId: scene.id,
             status: 'pending',
             videoUrl: null,
             error: null,
         }));
         setVideoStatuses(initialStatuses);
+        
+        // Create the Global Bible for continuity
+        const uniqueEnvironments = [...new Set(scenes.map(s => s.environment.trim()))]
+            .map((env, index) => ({
+                id: `env_${index + 1}`,
+                description: env,
+            }));
+
+        const globalBible: GlobalBible = {
+            characters: characters.filter(c => c.name.trim()),
+            environments: uniqueEnvironments,
+            style: visualStyle,
+            genre: narrativeGenre,
+        };
 
         const generatedVideos: { url: string; sceneId: number }[] = [];
         let generationFailed = false;
@@ -162,8 +177,8 @@ const App: React.FC = () => {
             const currentScene = scenes[i];
             setVideoStatuses(prev => prev.map(s => s.sceneId === currentScene.id ? { ...s, status: 'generating' } : s));
             try {
-                const prevSceneContext = i > 0 ? scenes[i - 1].action : 'This is the first scene.';
-                const videoUrl = await generateVideoForScene(currentScene, characters, visualStyle, narrativeGenre, prevSceneContext, (op) => {
+                const prevScene = i > 0 ? scenes[i - 1] : null;
+                const videoUrl = await generateVideoForScene(currentScene, characters, globalBible, prevScene, (op) => {
                     if (!op.done) {
                         setVideoStatuses(prev => prev.map(s => s.sceneId === currentScene.id ? { ...s, status: 'polling' } : s));
                     }
