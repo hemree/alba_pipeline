@@ -106,22 +106,20 @@ export const generateVideoForScene = async (
         // Step 1: Build the continuity-aware prompt using the new service
         const prompt = await buildContinuityPrompt(scene, globalBible, prevScene);
 
-        // Step 2: Find character reference image if applicable
-        const sceneCharacterName = scene.characters.length > 0 ? scene.characters[0] : null;
-        const characterForImage = sceneCharacterName ? characters.find(c => c.name.toLowerCase() === sceneCharacterName.toLowerCase() && c.imageBase64) : null;
+        // Step 2: Collect all available character images to send as references
+        const imageInputs = characters
+            .filter(c => c.imageBase64)
+            .map(c => ({
+                imageBytes: c.imageBase64!,
+                mimeType: c.imageFile?.type || 'image/jpeg'
+            }));
         
-        const imageInput = characterForImage && characterForImage.imageBase64
-            ? {
-                imageBytes: characterForImage.imageBase64,
-                mimeType: characterForImage.imageFile?.type || 'image/jpeg'
-              }
-            : undefined;
-
-        // Step 3: Generate video with the rich, consistent prompt
+        // Step 3: Generate video with the rich, consistent prompt and all character images
         let operation = await ai.models.generateVideos({
             model: videoModel,
             prompt,
-            image: imageInput,
+            // Pass all character images for maximum visual consistency
+            ...(imageInputs.length > 0 && { images: imageInputs }),
             config: {
               numberOfVideos: 1
             }

@@ -4,6 +4,7 @@ export interface Character {
     name: string;
     imageFile: File | null;
     imageBase64: string | null;
+    lockedDescription: string | null;
 }
 
 export type TransitionType = 'fade' | 'dissolve' | 'wipeleft' | 'wiperight' | 'circleopen';

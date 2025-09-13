@@ -5,6 +5,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSo
 
 import type { Character, Scene, VideoGenerationStatus, AppStep, VideoModel, TransitionType } from './types';
 import { breakdownStoryIntoScenes, generateVideoForScene } from './services/geminiService';
+import { generateCharacterDescription } from './services/characterDescriptorService';
 import { stitchVideos } from './services/videoStitchingService';
 import type { GlobalBible } from './services/continuityPromptBuilder';
 import CharacterInput from './components/CharacterInput';
@@ -49,7 +50,7 @@ const videoModelOptions: { label: string; value: VideoModel }[] = [
 const App: React.FC = () => {
     const [step, setStep] = useState<AppStep>('input');
     const [story, setStory] = useState<string>('');
-    const [characters, setCharacters] = useState<Character[]>([{ id: Date.now(), name: '', imageFile: null, imageBase64: null }]);
+    const [characters, setCharacters] = useState<Character[]>([{ id: Date.now(), name: '', imageFile: null, imageBase64: null, lockedDescription: null }]);
     const [visualStyle, setVisualStyle] = useState<string>(visualStyleOptions[0]);
     const [narrativeGenre, setNarrativeGenre] = useState<string>(narrativeGenreOptions[0]);
     // Corrected: Initialize videoModel with the only available option and remove setter as it's constant.
@@ -57,6 +58,7 @@ const App: React.FC = () => {
     const [scenes, setScenes] = useState<Scene[]>([]);
     const [videoStatuses, setVideoStatuses] = useState<VideoGenerationStatus[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
+    const [generatingDescriptions, setGeneratingDescriptions] = useState<boolean>(false);
     const [error, setError] = useState<string | null>(null);
     const [isStitching, setIsStitching] = useState<boolean>(false);
     const [stitchingProgress, setStitchingProgress] = useState<number>(0);
@@ -70,7 +72,7 @@ const App: React.FC = () => {
     );
 
     const handleAddCharacter = () => {
-        setCharacters([...characters, { id: Date.now(), name: '', imageFile: null, imageBase64: null }]);
+        setCharacters([...characters, { id: Date.now(), name: '', imageFile: null, imageBase64: null, lockedDescription: null }]);
     };
 
     const handleRemoveCharacter = (id: number) => {
@@ -78,7 +80,16 @@ const App: React.FC = () => {
     };
 
     const handleCharacterChange = (id: number, updatedCharacter: Character) => {
-        setCharacters(characters.map(char => char.id === id ? updatedCharacter : char));
+        setCharacters(characters.map(char => {
+            if (char.id === id) {
+                // If image is changed, invalidate the old description so it gets regenerated.
+                if (char.imageBase64 !== updatedCharacter.imageBase64) {
+                    return { ...updatedCharacter, lockedDescription: null };
+                }
+                return updatedCharacter;
+            }
+            return char;
+        }));
     };
 
     const handleStoryBreakdown = async () => {
@@ -149,6 +160,33 @@ const App: React.FC = () => {
         setStep('generate');
         setError(null);
 
+        // Step 1: Generate canonical character descriptions from images for consistency.
+        setGeneratingDescriptions(true);
+        let enrichedCharacters: Character[];
+        try {
+            enrichedCharacters = await Promise.all(
+                characters.map(async (char) => {
+                    // Only generate if there's an image and no description has been locked yet.
+                    if (char.imageBase64 && char.imageFile && !char.lockedDescription) {
+                        const description = await generateCharacterDescription(char);
+                        return { ...char, lockedDescription: description };
+                    }
+                    return char;
+                })
+            );
+            setCharacters(enrichedCharacters); // Update state to cache the new descriptions
+        } catch (e) {
+            console.error("Failed to generate character descriptions:", e);
+            const errorMessage = e instanceof Error ? e.message : "An unknown error occurred during character description generation.";
+            setError(`Failed to analyze character images: ${errorMessage}`);
+            setGeneratingDescriptions(false);
+            setStep('review'); // Go back to review step on failure
+            return;
+        } finally {
+            setGeneratingDescriptions(false);
+        }
+
+        // Step 2: Proceed with video generation using the enriched character data.
         const initialStatuses: VideoGenerationStatus[] = scenes.map((scene, index) => ({
             sceneIndex: index,
             sceneId: scene.id,
@@ -158,7 +196,7 @@ const App: React.FC = () => {
         }));
         setVideoStatuses(initialStatuses);
         
-        // Create the Global Bible for continuity
+        // Create the Global Bible for continuity using enriched characters
         const uniqueEnvironments = [...new Set(scenes.map(s => s.environment.trim()))]
             .map((env, index) => ({
                 id: `env_${index + 1}`,
@@ -166,7 +204,7 @@ const App: React.FC = () => {
             }));
 
         const globalBible: GlobalBible = {
-            characters: characters.filter(c => c.name.trim()),
+            characters: enrichedCharacters.filter(c => c.name.trim()),
             environments: uniqueEnvironments,
             style: visualStyle,
             genre: narrativeGenre,
@@ -180,7 +218,7 @@ const App: React.FC = () => {
             setVideoStatuses(prev => prev.map(s => s.sceneId === currentScene.id ? { ...s, status: 'generating' } : s));
             try {
                 const prevScene = i > 0 ? scenes[i - 1] : null;
-                const videoUrl = await generateVideoForScene(currentScene, characters, globalBible, prevScene, (op) => {
+                const videoUrl = await generateVideoForScene(currentScene, enrichedCharacters, globalBible, prevScene, (op) => {
                     if (!op.done) {
                         setVideoStatuses(prev => prev.map(s => s.sceneId === currentScene.id ? { ...s, status: 'polling' } : s));
                     }
@@ -226,7 +264,7 @@ const App: React.FC = () => {
 
     const handleReset = () => {
         setStory('');
-        setCharacters([{ id: Date.now(), name: '', imageFile: null, imageBase64: null }]);
+        setCharacters([{ id: Date.now(), name: '', imageFile: null, imageBase64: null, lockedDescription: null }]);
         setVisualStyle(visualStyleOptions[0]);
         setNarrativeGenre(narrativeGenreOptions[0]);
         // No need to reset videoModel as it's constant now.
@@ -239,7 +277,7 @@ const App: React.FC = () => {
         setStep('input');
     };
 
-    const isGenerating = videoStatuses.some(s => ['generating', 'polling'].includes(s.status)) || isStitching;
+    const isGenerating = generatingDescriptions || videoStatuses.some(s => ['generating', 'polling'].includes(s.status)) || isStitching;
 
     return (
         <div className="min-h-screen bg-[#FDFBF6] text-gray-800 flex flex-col items-center p-4 sm:p-8 font-sans">
@@ -396,6 +434,16 @@ const App: React.FC = () => {
                 {step === 'generate' && (
                     <div className="space-y-6 animate-fade-in">
                         <h2 className="text-3xl font-bold text-center">Video Generation</h2>
+                        
+                        {generatingDescriptions && (
+                            <div className="text-center p-4 bg-purple-100 rounded-lg border border-purple-200 shadow-sm">
+                                <p className="font-semibold text-purple-700 flex items-center justify-center gap-2">
+                                    <Spinner size="sm" />
+                                    Analyzing character reference images with AI to lock appearance...
+                                </p>
+                            </div>
+                        )}
+                        
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {scenes.map((scene, index) => {
                                 const status = videoStatuses.find(s => s.sceneId === scene.id);
