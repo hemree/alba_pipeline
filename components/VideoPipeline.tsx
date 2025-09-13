@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
@@ -42,9 +41,9 @@ const narrativeGenreOptions = [
     'Adventure / Quest',
 ];
 
-// Corrected: Use only the approved video model as per guidelines.
 const videoModelOptions: { label: string; value: VideoModel }[] = [
     { label: "Veo 2", value: "veo-2.0-generate-001" },
+    { label: "Veo 3", value: "veo-3.0-generate-001" },
 ];
 
 const VideoPipeline: React.FC = () => {
@@ -53,8 +52,7 @@ const VideoPipeline: React.FC = () => {
     const [characters, setCharacters] = useState<Character[]>([{ id: Date.now(), name: '', imageFile: null, imageBase64: null, lockedDescription: null }]);
     const [visualStyle, setVisualStyle] = useState<string>(visualStyleOptions[0]);
     const [narrativeGenre, setNarrativeGenre] = useState<string>(narrativeGenreOptions[0]);
-    // Corrected: Initialize videoModel with the only available option and remove setter as it's constant.
-    const [videoModel] = useState<VideoModel>(videoModelOptions[0].value);
+    const [videoModel, setVideoModel] = useState<VideoModel>(videoModelOptions[0].value);
     const [scenes, setScenes] = useState<Scene[]>([]);
     const [videoStatuses, setVideoStatuses] = useState<VideoGenerationStatus[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -267,7 +265,7 @@ const VideoPipeline: React.FC = () => {
         setCharacters([{ id: Date.now(), name: '', imageFile: null, imageBase64: null, lockedDescription: null }]);
         setVisualStyle(visualStyleOptions[0]);
         setNarrativeGenre(narrativeGenreOptions[0]);
-        // No need to reset videoModel as it's constant now.
+        setVideoModel(videoModelOptions[0].value);
         setScenes([]);
         setVideoStatuses([]);
         setError(null);
@@ -366,16 +364,23 @@ const VideoPipeline: React.FC = () => {
                                     </div>
                                 </div>
                             </div>
-                            {/* Corrected: Replaced dropdown with a disabled input for better UX as there is only one model option. */}
                             <div className="md:col-span-2 lg:col-span-1">
                                 <label htmlFor="video-model" className="block text-lg font-semibold mb-2 text-gray-700">Video Model</label>
-                                <input
-                                    id="video-model"
-                                    type="text"
-                                    value="Veo 2"
-                                    disabled
-                                    className="w-full p-3 bg-gray-100 border border-gray-300 text-gray-500 rounded-lg cursor-not-allowed"
-                                />
+                                <div className="relative">
+                                    <select
+                                        id="video-model"
+                                        value={videoModel}
+                                        onChange={(e) => setVideoModel(e.target.value as VideoModel)}
+                                        className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow appearance-none"
+                                    >
+                                        {videoModelOptions.map(opt => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

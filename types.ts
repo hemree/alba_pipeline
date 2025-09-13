@@ -1,4 +1,3 @@
-
 export interface Character {
     id: number;
     name: string;
@@ -28,7 +27,6 @@ export interface VideoGenerationStatus {
     error: string | null;
 }
 
-// Corrected: Only 'veo-2.0-generate-001' is a valid model according to the guidelines.
-export type VideoModel = 'veo-2.0-generate-001';
+export type VideoModel = 'veo-2.0-generate-001' | 'veo-3.0-generate-001';
 
 export type AppStep = 'input' | 'review' | 'generate' | 'finalize';
