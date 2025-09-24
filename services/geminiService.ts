@@ -1,35 +1,12 @@
-import { GoogleGenAI, Type } from "@google/genai";
 import type { Scene, Character, VideoModel } from '../types';
 import { buildContinuityPrompt, type GlobalBible } from './continuityPromptBuilder';
 
-const sceneSchema = {
-    type: Type.OBJECT,
-    properties: {
-        scene_description: {
-            type: Type.STRING,
-            description: "A short, one-sentence summary of this scene."
-        },
-        characters: {
-            type: Type.ARRAY,
-            items: {
-                type: Type.STRING
-            },
-            description: "A list of characters present in this scene. Must match names from the provided character list."
-        },
-        environment: {
-            type: Type.STRING,
-            description: "A detailed description of the location, atmosphere, lighting, and mood of the scene."
-        },
-        action: {
-            type: Type.STRING,
-            description: "A concise description of the main action happening in this scene. This will be a primary input for the video generation prompt."
-        }
-    },
-    required: ["scene_description", "characters", "environment", "action"]
-};
-
 export const breakdownStoryIntoScenes = async (story: string, characterDescriptions: string[]): Promise<Omit<Scene, 'id'>[]> => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) {
+        throw new Error("API key is not configured.");
+    }
+
     const prompt = `
         Break down the following story into a sequence of distinct scenes, with a maximum of 50 scenes.
         Each scene should represent approximately 8 seconds of video.
@@ -48,42 +25,54 @@ export const breakdownStoryIntoScenes = async (story: string, characterDescripti
         4. Always maintain style continuity for visuals (e.g., "Anime", "Comic book")
            and narrative genre tone (e.g., "Fantasy novel"), to be injected later.
 
+        Return ONLY a valid JSON array of scenes. Each scene should have: scene_description, characters, environment, action.
+
         Story:
         ---
         ${story}
         ---
     `;
 
-    let response;
     try {
-        response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: prompt,
-            config: {
-                responseMimeType: "application/json",
-                responseSchema: {
-                    type: Type.ARRAY,
-                    items: sceneSchema
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: prompt
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 8192,
                 }
-            }
+            })
         });
+
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+        if (!text) {
+            throw new Error("The AI returned an empty response. Please try modifying your story.");
+        }
+
+        // Extract JSON from the response (remove any markdown formatting)
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        const jsonText = jsonMatch ? jsonMatch[0] : text.trim();
+
+        const scenes = JSON.parse(jsonText) as Omit<Scene, 'id'>[];
+        return scenes.slice(0, 50); // Ensure max 50 scenes
     } catch (apiError) {
         console.error("Gemini API error during story breakdown:", apiError);
         const message = apiError instanceof Error ? apiError.message : "The API request failed.";
         throw new Error(`Could not connect to the AI service: ${message}`);
-    }
-        
-    const jsonText = response.text.trim();
-    if (!jsonText) {
-        throw new Error("The AI returned an empty response. Please try modifying your story.");
-    }
-
-    try {
-        const scenes = JSON.parse(jsonText) as Omit<Scene, 'id'>[];
-        return scenes.slice(0, 50); // Ensure max 50 scenes
-    } catch (parseError) {
-        console.error("Error parsing AI response:", parseError, "Raw response:", jsonText);
-        throw new Error("The AI returned a response in an unexpected format. Please try again.");
     }
 };
 
@@ -95,57 +84,78 @@ export const generateVideoForScene = async (
     onPoll: (operation: any) => void,
     videoModel: VideoModel
 ): Promise<string> => {
-    
+
     try {
         const apiKey = process.env.API_KEY;
         if (!apiKey) {
             throw new Error("API key is not configured.");
         }
-        const ai = new GoogleGenAI({ apiKey });
 
         // Step 1: Build the continuity-aware prompt using the new service
         const prompt = await buildContinuityPrompt(scene, globalBible, prevScene);
 
-        // Step 2: Collect all available character images to send as references
+        // Step 2: Prepare image data for character references
         const imageInputs = characters
             .filter(c => c.imageBase64)
             .map(c => ({
-                imageBytes: c.imageBase64!,
-                mimeType: c.imageFile?.type || 'image/jpeg'
+                inlineData: {
+                    data: c.imageBase64!.split(',')[1], // Remove data:image/jpeg;base64, prefix
+                    mimeType: c.imageFile?.type || 'image/jpeg'
+                }
             }));
-        
-        // Step 3: Generate video with the rich, consistent prompt and all character images
-        let operation = await ai.models.generateVideos({
+
+        // Step 3: Generate video using Veo API
+        const requestBody = {
             model: videoModel,
-            prompt,
-            // Pass all character images for maximum visual consistency
-            ...(imageInputs.length > 0 && { images: imageInputs }),
-            config: {
-              numberOfVideos: 1
-            }
+            prompt: prompt,
+            ...(imageInputs.length > 0 && {
+                referenceImages: imageInputs
+            })
+        };
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${videoModel}:generateVideo?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(requestBody)
         });
 
-        while (!operation.done) {
-          await new Promise(resolve => setTimeout(resolve, 10000));
-          operation = await ai.operations.getVideosOperation({ operation: operation });
-          onPoll(operation);
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(`Video generation API failed: ${errorData.error?.message || response.statusText}`);
         }
-        
+
+        const operationData = await response.json();
+        let operation = operationData;
+
+        // Poll for completion
+        while (!operation.done) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+
+            const pollResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/operations/${operation.name}?key=${apiKey}`);
+            if (pollResponse.ok) {
+                operation = await pollResponse.json();
+                onPoll(operation);
+            }
+        }
+
         if (operation.error) {
             throw new Error(`Video generation failed: ${operation.error.message}`);
         }
 
-        const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
-        if (!downloadLink) {
+        const videoUri = operation.response?.video?.uri;
+        if (!videoUri) {
             throw new Error("Video generation completed, but no download link was found.");
         }
 
-        const response = await fetch(`${downloadLink}&key=${apiKey}`);
-        if (!response.ok) {
-            throw new Error(`Failed to download the generated video (status: ${response.status}).`);
+        // Download the generated video
+        const videoResponse = await fetch(`${videoUri}?key=${apiKey}`);
+        if (!videoResponse.ok) {
+            throw new Error(`Failed to download the generated video (status: ${videoResponse.status}).`);
         }
-        
-        const videoBlob = await response.blob();
+
+        const videoBlob = await videoResponse.blob();
         return URL.createObjectURL(videoBlob);
     } catch (error) {
         console.error(`Unhandled error in generateVideoForScene for scene "${scene.scene_description}":`, error);

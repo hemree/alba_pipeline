@@ -2,8 +2,7 @@
 // in a serverless environment (e.g., Vercel, Netlify, Cloud Functions).
 // It is not part of the client-side bundle.
 
-// Corrected: Replaced Anthropic SDK with Google Gemini SDK.
-import { GoogleGenAI } from "@google/genai";
+// Using direct API calls to Gemini
 
 interface DescribeCharacterBody {
     name: string;
@@ -26,13 +25,11 @@ export default async function handler(request: Request): Promise<Response> {
                 headers: { 'Content-Type': 'application/json' },
             });
         }
-        
-        // Corrected: Use GoogleGenAI with the standard API_KEY environment variable.
-        // The Gemini API key is read from secure server-side environment variables.
-        // It is never exposed to the client.
-        const ai = new GoogleGenAI({
-            apiKey: process.env.API_KEY,
-        });
+
+        const apiKey = process.env.API_KEY;
+        if (!apiKey) {
+            throw new Error("API key is not configured.");
+        }
 
         const prompt = `
 You are an expert visual descriptor for animation continuity.
@@ -49,25 +46,38 @@ Return one paragraph only.
 Character Name: ${name}
 `;
 
-        // Corrected: Call the Gemini API with multimodal input.
-        const response = await ai.models.generateContent({
-            model: "gemini-2.5-flash",
-            contents: {
-                parts: [
-                  { text: prompt },
-                  {
-                    inlineData: {
-                      mimeType: mimeType,
-                      data: imageBase64,
-                    },
-                  },
-                ],
+        // Call the Gemini API with multimodal input
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
             },
-          });
-        
-        // Corrected: Extract text response using the recommended '.text' property.
-        const text = response.text;
-        
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        { text: prompt },
+                        {
+                            inlineData: {
+                                mimeType: mimeType,
+                                data: imageBase64.split(',')[1] // Remove data:image/jpeg;base64, prefix
+                            }
+                        }
+                    ]
+                }],
+                generationConfig: {
+                    temperature: 0.7,
+                    maxOutputTokens: 1024,
+                }
+            })
+        });
+
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
         if (!text.trim()) {
             // Corrected: Updated error message for Gemini.
             throw new Error("Gemini model returned an empty description.");
