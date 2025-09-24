@@ -2,6 +2,7 @@
 // in a serverless environment (e.g., Vercel, Netlify, Cloud Functions).
 // It is not part of the client-side bundle.
 
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import type { Scene, Character } from "../types";
 
 export interface GlobalBible {
@@ -19,15 +20,15 @@ interface ContinuityRequestBody {
 
 // This function simulates a serverless function handler.
 // The actual implementation will depend on your deployment platform.
-export default async function handler(request: Request): Promise<Response> {
-  if (request.method !== 'POST') {
-    return new Response('Method Not Allowed', { status: 405 });
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
   try {
-    const { scene, globalBible, prevScene } = await request.json() as ContinuityRequestBody;
+    const { scene, globalBible, prevScene } = req.body as ContinuityRequestBody;
 
-    const apiKey = process.env.API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
       throw new Error("API key is not configured.");
     }
@@ -135,17 +136,11 @@ ${userPrompt}
     console.log(`Generated Continuity Prompt for Scene ID ${scene.id}:`, finalPrompt);
 
     // Return the generated prompt as plain text
-    return new Response(finalPrompt.trim(), {
-      status: 200,
-      headers: { 'Content-Type': 'text/plain' },
-    });
+    return res.status(200).send(finalPrompt.trim());
 
   } catch (err) {
     console.error("Error in /api/continuity handler:", err);
     const message = err instanceof Error ? err.message : "An unknown error occurred.";
-    return new Response(JSON.stringify({ error: `Server error: ${message}` }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return res.status(500).json({ error: `Server error: ${message}` });
   }
 }

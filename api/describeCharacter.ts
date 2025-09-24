@@ -2,6 +2,8 @@
 // in a serverless environment (e.g., Vercel, Netlify, Cloud Functions).
 // It is not part of the client-side bundle.
 
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
 // Using direct API calls to Gemini
 
 interface DescribeCharacterBody {

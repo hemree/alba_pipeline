@@ -16,6 +16,7 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
+    "@vercel/node": "^5.3.24",
     "concurrently": "^9.2.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",

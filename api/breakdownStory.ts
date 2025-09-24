@@ -1,11 +1,13 @@
 // Server-side endpoint for story breakdown
-export default async function handler(request: Request): Promise<Response> {
-    if (request.method !== 'POST') {
-        return new Response('Method Not Allowed', { status: 405 });
+import type { VercelRequest, VercelResponse } from '@vercel/node';
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
     try {
-        const { story, characterDescriptions } = await request.json();
+        const { story, characterDescriptions } = req.body;
 
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
@@ -74,23 +76,13 @@ export default async function handler(request: Request): Promise<Response> {
         const scenes = JSON.parse(jsonText);
         const limitedScenes = scenes.slice(0, 50); // Ensure max 50 scenes
 
-        return new Response(JSON.stringify(limitedScenes), {
-            status: 200,
-            headers: {
-                'Content-Type': 'application/json',
-            },
-        });
+        return res.status(200).json(limitedScenes);
 
     } catch (error) {
         console.error("Story breakdown error:", error);
         const message = error instanceof Error ? error.message : "The API request failed.";
-        return new Response(JSON.stringify({
+        return res.status(500).json({
             error: `Could not connect to the AI service: ${message}`
-        }), {
-            status: 500,
-            headers: {
-                'Content-Type': 'application/json',
-            },
         });
     }
 }
