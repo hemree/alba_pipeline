@@ -26,11 +26,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { scene, globalBible, prevScene } = req.body as ContinuityRequestBody;
+    const { scene, globalBible, prevScene, accessToken } = req.body as ContinuityRequestBody & { accessToken: string };
 
-    const apiKey = process.env.GEMINI_API_KEY;
-    if (!apiKey) {
-      throw new Error("API key is not configured.");
+    if (!accessToken) {
+      return res.status(401).json({ error: 'Access token is required' });
     }
 
     // The prompt-building logic is now securely on the server.
@@ -101,10 +100,11 @@ ${userPrompt}
     }
 
     // Call the Gemini API directly
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${accessToken}`,
       },
       body: JSON.stringify({
         contents: [{

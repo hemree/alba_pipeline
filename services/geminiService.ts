@@ -52,6 +52,11 @@ export const generateVideoForScene = async (
 ): Promise<string> => {
 
     try {
+        const accessToken = authService.getAccessToken();
+        if (!accessToken) {
+            throw new Error('Authentication required. Please sign in with Google.');
+        }
+
         const response = await fetch('/api/generateVideo', {
             method: 'POST',
             headers: {
@@ -63,6 +68,7 @@ export const generateVideoForScene = async (
                 globalBible,
                 prevScene,
                 videoModel,
+                accessToken,
             }),
         });
 
@@ -92,6 +98,7 @@ export const generateVideoForScene = async (
                 },
                 body: JSON.stringify({
                     operationName: operation.name,
+                    accessToken,
                 }),
             });
 
@@ -118,6 +125,7 @@ export const generateVideoForScene = async (
             },
             body: JSON.stringify({
                 videoUri: videoUri,
+                accessToken,
             }),
         });
 

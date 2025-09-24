@@ -5,15 +5,21 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     try {
-        const { videoUri } = await request.json();
-        
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            throw new Error("API key is not configured.");
+        const { videoUri, accessToken } = await request.json();
+
+        if (!accessToken) {
+            return new Response(JSON.stringify({ error: 'Access token is required' }), {
+                status: 401,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
-        const videoResponse = await fetch(`${videoUri}?key=${apiKey}`);
-        
+        const videoResponse = await fetch(videoUri, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`,
+            },
+        });
+
         if (!videoResponse.ok) {
             throw new Error(`Failed to download video with status ${videoResponse.status}`);
         }
@@ -32,8 +38,8 @@ export default async function handler(request: Request): Promise<Response> {
     } catch (error) {
         console.error("Download video error:", error);
         const message = error instanceof Error ? error.message : "Video download failed";
-        return new Response(JSON.stringify({ 
-            error: message 
+        return new Response(JSON.stringify({
+            error: message
         }), {
             status: 500,
             headers: {

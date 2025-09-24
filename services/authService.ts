@@ -14,8 +14,8 @@ class AuthService {
     initiateGoogleAuth(): void {
         const clientId = '666474673330-arsk7l5ma60krpjc3ggeej44dt1s0v25.apps.googleusercontent.com';
         const redirectUri = window.location.origin;
-        const scope = 'https://www.googleapis.com/auth/generative-language.retriever';
-        
+        const scope = 'https://www.googleapis.com/auth/generative-language';
+
         const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -60,7 +60,7 @@ class AuthService {
 
             // Clean up URL
             window.history.replaceState({}, document.title, window.location.pathname);
-            
+
             return true;
         } catch (error) {
             console.error('Auth callback error:', error);

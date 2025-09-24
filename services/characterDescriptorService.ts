@@ -1,11 +1,17 @@
 
 import type { Character } from '../types';
+import { authService } from './authService';
 
 export async function generateCharacterDescription(
     character: Character
 ): Promise<string> {
     if (!character.imageBase64 || !character.imageFile) {
         throw new Error("Character image data is missing.");
+    }
+
+    const accessToken = authService.getAccessToken();
+    if (!accessToken) {
+        throw new Error('Authentication required. Please sign in with Google.');
     }
 
     try {
@@ -18,6 +24,7 @@ export async function generateCharacterDescription(
                 name: character.name,
                 imageBase64: character.imageBase64,
                 mimeType: character.imageFile.type,
+                accessToken,
             }),
         });
 
@@ -27,8 +34,8 @@ export async function generateCharacterDescription(
                 const errorJson = await response.json();
                 errorMsg = errorJson.error || errorMsg;
             } catch (e) {
-                 const textError = await response.text();
-                 errorMsg = textError || errorMsg;
+                const textError = await response.text();
+                errorMsg = textError || errorMsg;
             }
             throw new Error(`${errorMsg}`);
         }
