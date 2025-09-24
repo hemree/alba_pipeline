@@ -19,18 +19,11 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     try {
-        const { name, imageBase64, mimeType, accessToken } = await request.json() as DescribeCharacterBody & { accessToken: string };
+        const { name, imageBase64, mimeType } = await request.json() as DescribeCharacterBody;
 
         if (!name || !imageBase64 || !mimeType) {
             return new Response(JSON.stringify({ error: 'Missing name, imageBase64, or mimeType in request body' }), {
                 status: 400,
-                headers: { 'Content-Type': 'application/json' },
-            });
-        }
-
-        if (!accessToken) {
-            return new Response(JSON.stringify({ error: 'Access token is required' }), {
-                status: 401,
                 headers: { 'Content-Type': 'application/json' },
             });
         }
@@ -50,12 +43,17 @@ Return one paragraph only.
 Character Name: ${name}
 `;
 
+        // Use API key on server-side (secure)
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            throw new Error("API key is not configured.");
+        }
+
         // Call the Gemini API with multimodal input
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
                 contents: [{

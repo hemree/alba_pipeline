@@ -7,11 +7,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     try {
-        const { story, characterDescriptions, accessToken } = req.body;
-
-        if (!accessToken) {
-            return res.status(401).json({ error: 'Access token is required' });
-        }
+        const { story, characterDescriptions } = req.body;
 
         const prompt = `
         Break down the following story into a sequence of distinct scenes, with a maximum of 50 scenes.
@@ -39,11 +35,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ---
         `;
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`, {
+        // Use API key on server-side (secure)
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            throw new Error("API key is not configured.");
+        }
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify({
                 contents: [{

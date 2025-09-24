@@ -8,7 +8,6 @@ interface GenerateVideoRequest {
     globalBible: GlobalBible;
     prevScene: Scene | null;
     videoModel: VideoModel;
-    accessToken: string;
 }
 
 export default async function handler(request: Request): Promise<Response> {
@@ -17,14 +16,7 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     try {
-        const { scene, characters, globalBible, prevScene, videoModel, accessToken } = await request.json() as GenerateVideoRequest;
-
-        if (!accessToken) {
-            return new Response(JSON.stringify({ error: 'Access token is required' }), {
-                status: 401,
-                headers: { 'Content-Type': 'application/json' },
-            });
-        }
+        const { scene, characters, globalBible, prevScene, videoModel } = await request.json() as GenerateVideoRequest;
 
         // Step 1: Build the continuity-aware prompt
         const continuityResponse = await fetch('/api/continuity', {
@@ -36,7 +28,6 @@ export default async function handler(request: Request): Promise<Response> {
                 scene,
                 globalBible,
                 prevScene,
-                accessToken,
             }),
         });
 
@@ -65,11 +56,16 @@ export default async function handler(request: Request): Promise<Response> {
             })
         };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${videoModel}:generateVideo`, {
+        // Use API key on server-side (secure)
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            throw new Error("API key is not configured.");
+        }
+
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${videoModel}:generateVideo?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${accessToken}`,
             },
             body: JSON.stringify(requestBody)
         });

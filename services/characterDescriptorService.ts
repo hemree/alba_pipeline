@@ -9,9 +9,10 @@ export async function generateCharacterDescription(
         throw new Error("Character image data is missing.");
     }
 
-    const accessToken = authService.getAccessToken();
-    if (!accessToken) {
-        throw new Error('Authentication required. Please sign in with Google.');
+    // Ensure we have authentication
+    const isAuthenticated = await authService.initializeAuth();
+    if (!isAuthenticated) {
+        throw new Error('Authentication failed. Please try again.');
     }
 
     try {
@@ -24,7 +25,6 @@ export async function generateCharacterDescription(
                 name: character.name,
                 imageBase64: character.imageBase64,
                 mimeType: character.imageFile.type,
-                accessToken,
             }),
         });
 

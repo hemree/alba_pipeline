@@ -5,20 +5,15 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     try {
-        const { operationName, accessToken } = await request.json();
+        const { operationName } = await request.json();
 
-        if (!accessToken) {
-            return new Response(JSON.stringify({ error: 'Access token is required' }), {
-                status: 401,
-                headers: { 'Content-Type': 'application/json' },
-            });
+        // Use API key on server-side (secure)
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+            throw new Error("API key is not configured.");
         }
 
-        const pollResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/operations/${operationName}`, {
-            headers: {
-                'Authorization': `Bearer ${accessToken}`,
-            },
-        });
+        const pollResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/operations/${operationName}?key=${apiKey}`);
 
         if (!pollResponse.ok) {
             throw new Error(`Poll request failed with status ${pollResponse.status}`);

@@ -1,96 +1,65 @@
-// Google OAuth2 authentication service
+// Simplified authentication service using server-side token management
 export interface AuthTokens {
     access_token: string;
-    refresh_token?: string;
     expires_in: number;
 }
 
 class AuthService {
     private accessToken: string | null = null;
-    private refreshToken: string | null = null;
     private expiresAt: number | null = null;
 
-    // Initialize Google OAuth2 flow
-    initiateGoogleAuth(): void {
-        const clientId = '666474673330-arsk7l5ma60krpjc3ggeej44dt1s0v25.apps.googleusercontent.com';
-        const redirectUri = window.location.origin;
-        const scope = 'https://www.googleapis.com/auth/generative-language';
-
-        const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
-        authUrl.searchParams.set('client_id', clientId);
-        authUrl.searchParams.set('redirect_uri', redirectUri);
-        authUrl.searchParams.set('response_type', 'code');
-        authUrl.searchParams.set('scope', scope);
-        authUrl.searchParams.set('access_type', 'offline');
-        authUrl.searchParams.set('prompt', 'consent');
-
-        window.location.href = authUrl.toString();
-    }
-
-    // Handle OAuth2 callback
-    async handleAuthCallback(): Promise<boolean> {
-        const urlParams = new URLSearchParams(window.location.search);
-        const code = urlParams.get('code');
-        const error = urlParams.get('error');
-
-        if (error) {
-            console.error('OAuth error:', error);
-            return false;
-        }
-
-        if (!code) {
-            return false;
-        }
-
+    // Get access token from server (using Service Account)
+    async getServerAccessToken(): Promise<string | null> {
         try {
-            const response = await fetch('/api/auth/google', {
+            const response = await fetch('/api/auth/token', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ code }),
             });
 
             if (!response.ok) {
-                throw new Error('Token exchange failed');
+                throw new Error('Failed to get access token');
             }
 
             const tokens: AuthTokens = await response.json();
             this.setTokens(tokens);
-
-            // Clean up URL
-            window.history.replaceState({}, document.title, window.location.pathname);
-
-            return true;
+            return this.accessToken;
         } catch (error) {
-            console.error('Auth callback error:', error);
-            return false;
+            console.error('Failed to get access token:', error);
+            return null;
         }
+    }
+
+    // Initialize authentication (simplified)
+    async initializeAuth(): Promise<boolean> {
+        // First try to load stored tokens
+        if (this.loadStoredTokens()) {
+            return true;
+        }
+
+        // If no stored tokens, get new ones from server
+        const token = await this.getServerAccessToken();
+        return token !== null;
     }
 
     // Set authentication tokens
     private setTokens(tokens: AuthTokens): void {
         this.accessToken = tokens.access_token;
-        this.refreshToken = tokens.refresh_token || null;
         this.expiresAt = Date.now() + (tokens.expires_in * 1000);
 
         // Store in localStorage for persistence
         localStorage.setItem('google_access_token', this.accessToken);
-        if (this.refreshToken) {
-            localStorage.setItem('google_refresh_token', this.refreshToken);
-        }
         localStorage.setItem('google_expires_at', this.expiresAt.toString());
     }
 
     // Load tokens from localStorage
     loadStoredTokens(): boolean {
         const accessToken = localStorage.getItem('google_access_token');
-        const refreshToken = localStorage.getItem('google_refresh_token');
         const expiresAt = localStorage.getItem('google_expires_at');
 
         if (accessToken && expiresAt) {
             this.accessToken = accessToken;
-            this.refreshToken = refreshToken;
             this.expiresAt = parseInt(expiresAt);
 
             // Check if token is still valid
@@ -121,7 +90,6 @@ class AuthService {
     // Clear all tokens
     clearTokens(): void {
         this.accessToken = null;
-        this.refreshToken = null;
         this.expiresAt = null;
 
         localStorage.removeItem('google_access_token');

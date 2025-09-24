@@ -4,9 +4,10 @@ import { authService } from './authService';
 
 export const breakdownStoryIntoScenes = async (story: string, characterDescriptions: string[]): Promise<Omit<Scene, 'id'>[]> => {
     try {
-        const accessToken = authService.getAccessToken();
-        if (!accessToken) {
-            throw new Error('Authentication required. Please sign in with Google.');
+        // Ensure we have authentication
+        const isAuthenticated = await authService.initializeAuth();
+        if (!isAuthenticated) {
+            throw new Error('Authentication failed. Please try again.');
         }
 
         const response = await fetch('/api/breakdownStory', {
@@ -17,7 +18,6 @@ export const breakdownStoryIntoScenes = async (story: string, characterDescripti
             body: JSON.stringify({
                 story,
                 characterDescriptions,
-                accessToken,
             }),
         });
 
@@ -52,9 +52,10 @@ export const generateVideoForScene = async (
 ): Promise<string> => {
 
     try {
-        const accessToken = authService.getAccessToken();
-        if (!accessToken) {
-            throw new Error('Authentication required. Please sign in with Google.');
+        // Ensure we have authentication
+        const isAuthenticated = await authService.initializeAuth();
+        if (!isAuthenticated) {
+            throw new Error('Authentication failed. Please try again.');
         }
 
         const response = await fetch('/api/generateVideo', {
@@ -68,7 +69,6 @@ export const generateVideoForScene = async (
                 globalBible,
                 prevScene,
                 videoModel,
-                accessToken,
             }),
         });
 
@@ -98,7 +98,6 @@ export const generateVideoForScene = async (
                 },
                 body: JSON.stringify({
                     operationName: operation.name,
-                    accessToken,
                 }),
             });
 
@@ -125,7 +124,6 @@ export const generateVideoForScene = async (
             },
             body: JSON.stringify({
                 videoUri: videoUri,
-                accessToken,
             }),
         });
 

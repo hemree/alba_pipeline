@@ -10,20 +10,8 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const initAuth = async () => {
-            // Check for stored tokens
-            if (authService.loadStoredTokens()) {
-                setIsAuthenticated(true);
-                setIsLoading(false);
-                return;
-            }
-
-            // Check for OAuth callback
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('code')) {
-                const success = await authService.handleAuthCallback();
-                setIsAuthenticated(success);
-            }
-
+            const isAuthenticated = await authService.initializeAuth();
+            setIsAuthenticated(isAuthenticated);
             setIsLoading(false);
         };
 
