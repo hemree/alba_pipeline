@@ -1,8 +1,14 @@
 import type { Scene, Character, VideoModel } from '../types';
 import type { GlobalBible } from './continuityPromptBuilder';
+import { authService } from './authService';
 
 export const breakdownStoryIntoScenes = async (story: string, characterDescriptions: string[]): Promise<Omit<Scene, 'id'>[]> => {
     try {
+        const accessToken = authService.getAccessToken();
+        if (!accessToken) {
+            throw new Error('Authentication required. Please sign in with Google.');
+        }
+
         const response = await fetch('/api/breakdownStory', {
             method: 'POST',
             headers: {
@@ -11,6 +17,7 @@ export const breakdownStoryIntoScenes = async (story: string, characterDescripti
             body: JSON.stringify({
                 story,
                 characterDescriptions,
+                accessToken,
             }),
         });
 
