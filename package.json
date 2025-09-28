@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "server": "node server.js",
+    "server": "node --experimental-modules server.js",
     "dev:full": "concurrently \"npm run server\" \"npm run dev\"",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "node:version": "node --version",
+    "node:check": "node --check server.js"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -27,11 +29,11 @@
     "react-dom": "^19.1.1"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.14.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   },
   "engines": {
-    "node": "20.x"
+    "node": "22.x"
   }
 }

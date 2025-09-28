@@ -1,4 +1,5 @@
 // Server-side endpoint for character generation
+// Optimized for Node.js 22.x with modern JavaScript features
 import { GoogleGenAI } from "@google/genai";
 
 interface GenerateCharacterRequest {

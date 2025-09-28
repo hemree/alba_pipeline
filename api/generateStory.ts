@@ -1,4 +1,5 @@
 // Server-side endpoint for story generation
+// Optimized for Node.js 22.x with modern JavaScript features
 
 interface GenerateStoryRequest {
     genre?: string;
