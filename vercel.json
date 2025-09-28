@@ -11,6 +11,5 @@
     }
   ],
   "buildCommand": "npm run build",
-  "framework": "vite",
-  "nodeVersion": "18.x"
+  "framework": "vite"
 }
