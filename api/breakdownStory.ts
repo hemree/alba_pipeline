@@ -1,35 +1,39 @@
 // Server-side endpoint for story breakdown
 
-export async function POST(request: Request) {
+async function handleRequest(request: Request) {
 
     try {
         const { story, characterDescriptions } = await request.json();
 
-        const prompt = `
-        Break down the following story into a sequence of distinct scenes, with a maximum of 50 scenes.
-        Each scene should represent approximately 8 seconds of video.
+        const prompt = `You are a professional video director. Break down the following story into a sequence of distinct scenes for video production. Create between 3-10 scenes, each representing approximately 8 seconds of video.
 
-        Requirements:
-        1. Ensure continuity between scenes.
-           - Mention how each scene connects to the previous one.
-           - If a character appears again, use consistent naming and descriptions.
-           - Keep environments visually consistent unless the story explicitly changes setting.
-        2. Use ONLY the provided characters: [${characterDescriptions ? characterDescriptions.join(', ') : 'No specific characters provided'}].
-        3. For each scene, return structured JSON with:
-           - scene_description: one sentence summary.
-           - characters: list of character names from the provided list.
-           - environment: location, atmosphere, lighting, and mood (consistent across scenes).
-           - action: concise description of the main action, with continuity note if needed.
-        4. Always maintain style continuity for visuals (e.g., "Anime", "Comic book")
-           and narrative genre tone (e.g., "Fantasy novel"), to be injected later.
+Available characters: ${characterDescriptions && characterDescriptions.length > 0 ? characterDescriptions.join(', ') : 'Create appropriate characters for the story'}
 
-        Return ONLY a valid JSON array of scenes. Each scene should have: scene_description, characters, environment, action.
+For each scene, provide:
+- scene_description: A clear, one-sentence summary of what happens
+- characters: Array of character names appearing in this scene
+- environment: Detailed description of location, lighting, and atmosphere
+- action: Specific description of the main action or movement
 
-        Story:
-        ---
-        ${story}
-        ---
-        `;
+Story: "${story}"
+
+You must return a valid JSON array with at least 3 scenes. Example:
+[
+  {
+    "scene_description": "A brave knight prepares for battle in the castle courtyard",
+    "characters": ["Knight"],
+    "environment": "Medieval castle courtyard with stone walls, morning sunlight filtering through clouds",
+    "action": "The knight adjusts armor and grips sword handle, looking determined"
+  },
+  {
+    "scene_description": "The knight rides through a dark forest toward the dragon's lair",
+    "characters": ["Knight"],
+    "environment": "Dense, shadowy forest with twisted trees and dappled light",
+    "action": "Knight on horseback navigating through the forest path, alert and cautious"
+  }
+]
+
+Return only the JSON array:`;
 
         // Use API key on server-side (secure)
         const apiKey = process.env.GEMINI_API_KEY;
@@ -68,11 +72,74 @@ export async function POST(request: Request) {
         }
 
         // Extract JSON from the response (remove any markdown formatting)
-        const jsonMatch = text.match(/\[[\s\S]*\]/);
-        const jsonText = jsonMatch ? jsonMatch[0] : text.trim();
+        console.log("Raw AI response:", text);
 
-        const scenes = JSON.parse(jsonText);
-        const limitedScenes = scenes.slice(0, 50); // Ensure max 50 scenes
+        // Try multiple approaches to extract valid JSON
+        let jsonText = '';
+        let scenes = [];
+
+        // First, try to find JSON array in the response
+        const jsonMatch = text.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+            jsonText = jsonMatch[0];
+        } else {
+            // If no array found, try to extract from code blocks
+            const codeBlockMatch = text.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
+            if (codeBlockMatch) {
+                jsonText = codeBlockMatch[1];
+            } else {
+                jsonText = text.trim();
+            }
+        }
+
+        console.log("Extracted JSON text:", jsonText);
+
+        try {
+            scenes = JSON.parse(jsonText);
+        } catch (parseError) {
+            console.error("JSON parse error:", parseError);
+            console.error("Failed to parse JSON at position:", parseError.message);
+
+            // Try to clean up common JSON issues
+            let cleanedJson = jsonText
+                .replace(/,\s*}/g, '}')  // Remove trailing commas before }
+                .replace(/,\s*]/g, ']')  // Remove trailing commas before ]
+                .replace(/([{,]\s*)(\w+):/g, '$1"$2":')  // Quote unquoted keys
+                .replace(/:\s*'([^']*)'/g, ': "$1"')  // Replace single quotes with double quotes
+                .replace(/\n/g, ' ')  // Remove newlines
+                .replace(/\s+/g, ' ')  // Normalize whitespace
+                .trim();
+
+            console.log("Attempting to parse cleaned JSON:", cleanedJson);
+
+            try {
+                scenes = JSON.parse(cleanedJson);
+            } catch (secondParseError) {
+                console.error("Second JSON parse attempt failed:", secondParseError);
+                throw new Error(`Invalid JSON response from AI. Parse error: ${parseError.message}. Raw response: ${text.substring(0, 500)}...`);
+            }
+        }
+
+        // Validate the parsed scenes
+        if (!Array.isArray(scenes)) {
+            throw new Error("AI response is not a valid array of scenes");
+        }
+
+        // Validate each scene has required properties
+        const validScenes = scenes.filter(scene => {
+            return scene &&
+                typeof scene.scene_description === 'string' &&
+                Array.isArray(scene.characters) &&
+                typeof scene.environment === 'string' &&
+                typeof scene.action === 'string';
+        });
+
+        if (validScenes.length === 0) {
+            throw new Error("No valid scenes found in AI response");
+        }
+
+        console.log(`Successfully parsed ${validScenes.length} valid scenes`);
+        const limitedScenes = validScenes.slice(0, 50); // Ensure max 50 scenes
 
         return new Response(JSON.stringify(limitedScenes), {
             status: 200,
@@ -88,5 +155,45 @@ export async function POST(request: Request) {
             status: 500,
             headers: { 'Content-Type': 'application/json' },
         });
+    }
+}
+
+export async function POST(request: Request) {
+    return handleRequest(request);
+}
+
+export default async function handler(req: any, res: any) {
+    try {
+        const url = req.url?.startsWith('http') ? req.url : `http://localhost:3001${req.url || '/api/breakdownStory'}`;
+        const request = new Request(url, {
+            method: req.method,
+            headers: req.headers,
+            body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
+        });
+
+        const response = await handleRequest(request);
+        if (!response) {
+            res.status(500).json({ error: 'handleRequest returned undefined' });
+            return;
+        }
+
+        const data = await response.text();
+        const statusCode = response.status;
+
+        if (!statusCode) {
+            console.error('Response object missing status property');
+            res.status(500).json({ error: 'Invalid response from handler' });
+            return;
+        }
+
+        try {
+            const jsonData = JSON.parse(data);
+            res.status(statusCode).json(jsonData);
+        } catch (parseError) {
+            res.status(statusCode).send(data);
+        }
+    } catch (error) {
+        console.error('Handler error:', error);
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
     }
 }
