@@ -46,14 +46,7 @@ app.post('/api/breakdownStory', async (req, res) => {
 
 app.post('/api/generateStory', async (req, res) => {
     try {
-        const request = new Request('http://localhost/api/generateStory', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body)
-        });
-        const response = await generateStoryHandler(request);
-        const data = await response.text();
-        res.status(response.status).json(JSON.parse(data));
+        await generateStoryHandler(req, res);
     } catch (error) {
         console.error('Story generation error:', error);
         res.status(500).json({ error: error.message });
@@ -62,14 +55,7 @@ app.post('/api/generateStory', async (req, res) => {
 
 app.post('/api/generateCharacter', async (req, res) => {
     try {
-        const request = new Request('http://localhost/api/generateCharacter', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body)
-        });
-        const response = await generateCharacterHandler(request);
-        const data = await response.text();
-        res.status(response.status).json(JSON.parse(data));
+        await generateCharacterHandler(req, res);
     } catch (error) {
         console.error('Character generation error:', error);
         res.status(500).json({ error: error.message });
@@ -78,14 +64,7 @@ app.post('/api/generateCharacter', async (req, res) => {
 
 app.post('/api/generateVideo', async (req, res) => {
     try {
-        const request = new Request('http://localhost/api/generateVideo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body)
-        });
-        const response = await generateVideoHandler(request);
-        const data = await response.text();
-        res.status(response.status).json(JSON.parse(data));
+        await generateVideoHandler(req, res);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -93,14 +72,7 @@ app.post('/api/generateVideo', async (req, res) => {
 
 app.post('/api/continuity', async (req, res) => {
     try {
-        const request = new Request('http://localhost/api/continuity', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body)
-        });
-        const response = await continuityHandler(request);
-        const data = await response.text();
-        res.status(response.status).send(data);
+        await continuityHandler(req, res);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -108,14 +80,7 @@ app.post('/api/continuity', async (req, res) => {
 
 app.post('/api/describeCharacter', async (req, res) => {
     try {
-        const request = new Request('http://localhost/api/describeCharacter', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body)
-        });
-        const response = await describeCharacterHandler(request);
-        const data = await response.text();
-        res.status(response.status).send(data);
+        await describeCharacterHandler(req, res);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -123,14 +88,7 @@ app.post('/api/describeCharacter', async (req, res) => {
 
 app.post('/api/pollOperation', async (req, res) => {
     try {
-        const request = new Request('http://localhost/api/pollOperation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body)
-        });
-        const response = await pollOperationHandler(request);
-        const data = await response.text();
-        res.status(response.status).json(JSON.parse(data));
+        await pollOperationHandler(req, res);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
@@ -138,16 +96,7 @@ app.post('/api/pollOperation', async (req, res) => {
 
 app.post('/api/downloadVideo', async (req, res) => {
     try {
-        const request = new Request('http://localhost/api/downloadVideo', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body)
-        });
-        const response = await downloadVideoHandler(request);
-        const arrayBuffer = await response.arrayBuffer();
-        res.status(response.status)
-            .set('Content-Type', 'video/mp4')
-            .send(Buffer.from(arrayBuffer));
+        await downloadVideoHandler(req, res);
     } catch (error) {
         res.status(500).json({ error: error.message });
     }

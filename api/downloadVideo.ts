@@ -1,17 +1,26 @@
 // Server-side endpoint for downloading generated videos
 
 export default async function handler(req: any, res: any) {
-    // Convert Vercel format to our format
-    const request = new Request(req.url, {
-        method: req.method,
-        headers: req.headers,
-        body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
-    });
+    try {
+        // Convert Vercel format to our format
+        const url = req.url?.startsWith('http') ? req.url : `http://localhost:3001${req.url || '/api/downloadVideo'}`;
+        const request = new Request(url, {
+            method: req.method,
+            headers: req.headers,
+            body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
+        });
 
-    const response = await handleRequest(request);
-    const data = await response.text();
+        const response = await handleRequest(request);
+        if (!response) {
+            throw new Error('handleRequest returned undefined');
+        }
 
-    res.status(response.status).json(JSON.parse(data));
+        const data = await response.text();
+        res.status(response.status).json(JSON.parse(data));
+    } catch (error) {
+        console.error('Handler error:', error);
+        res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
+    }
 }
 
 async function handleRequest(request: Request): Promise<Response> {
