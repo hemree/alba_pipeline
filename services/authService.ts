@@ -11,7 +11,7 @@ class AuthService {
     // Get access token from server (using Service Account)
     async getServerAccessToken(): Promise<string | null> {
         try {
-            const response = await fetch('/api/auth/token', {
+            const response = await fetch('http://localhost:3001/api/auth/token', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

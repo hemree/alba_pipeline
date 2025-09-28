@@ -1,26 +1,31 @@
 // Server-side endpoint for downloading generated videos
+import { GoogleGenAI } from "@google/genai";
+
 export default async function handler(request: Request): Promise<Response> {
     if (request.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 });
     }
 
     try {
-        const { videoUri } = await request.json();
+        const { videoFile } = await request.json();
 
-        // Use API key on server-side (secure)
+        // Use new Google GenAI SDK for downloading
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             throw new Error("API key is not configured.");
         }
 
-        const videoResponse = await fetch(`${videoUri}?key=${apiKey}`);
+        const ai = new GoogleGenAI({
+            apiKey: apiKey
+        });
 
-        if (!videoResponse.ok) {
-            throw new Error(`Failed to download video with status ${videoResponse.status}`);
-        }
+        // Download using the SDK
+        const videoData = await ai.files.download({
+            file: videoFile
+        });
 
-        const videoBlob = await videoResponse.blob();
-        const arrayBuffer = await videoBlob.arrayBuffer();
+        // Convert to array buffer for response
+        const arrayBuffer = videoData instanceof ArrayBuffer ? videoData : await videoData.arrayBuffer();
 
         return new Response(arrayBuffer, {
             status: 200,

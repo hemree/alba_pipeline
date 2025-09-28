@@ -19,11 +19,14 @@ app.use(express.json({ limit: '50mb' }));
 
 // Import API handlers
 const breakdownStoryHandler = (await import('./api/breakdownStory.ts')).default;
+const generateStoryHandler = (await import('./api/generateStory.ts')).default;
+const generateCharacterHandler = (await import('./api/generateCharacter.ts')).default;
 const generateVideoHandler = (await import('./api/generateVideo.ts')).default;
 const continuityHandler = (await import('./api/continuity.ts')).default;
 const describeCharacterHandler = (await import('./api/describeCharacter.ts')).default;
 const pollOperationHandler = (await import('./api/pollOperation.ts')).default;
 const downloadVideoHandler = (await import('./api/downloadVideo.ts')).default;
+const authTokenHandler = (await import('./api/auth/token.ts')).default;
 
 // API Routes
 app.post('/api/breakdownStory', async (req, res) => {
@@ -37,6 +40,38 @@ app.post('/api/breakdownStory', async (req, res) => {
         const data = await response.text();
         res.status(response.status).json(JSON.parse(data));
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/generateStory', async (req, res) => {
+    try {
+        const request = new Request('http://localhost/api/generateStory', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body)
+        });
+        const response = await generateStoryHandler(request);
+        const data = await response.text();
+        res.status(response.status).json(JSON.parse(data));
+    } catch (error) {
+        console.error('Story generation error:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/generateCharacter', async (req, res) => {
+    try {
+        const request = new Request('http://localhost/api/generateCharacter', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body)
+        });
+        const response = await generateCharacterHandler(request);
+        const data = await response.text();
+        res.status(response.status).json(JSON.parse(data));
+    } catch (error) {
+        console.error('Character generation error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -111,9 +146,25 @@ app.post('/api/downloadVideo', async (req, res) => {
         const response = await downloadVideoHandler(request);
         const arrayBuffer = await response.arrayBuffer();
         res.status(response.status)
-           .set('Content-Type', 'video/mp4')
-           .send(Buffer.from(arrayBuffer));
+            .set('Content-Type', 'video/mp4')
+            .send(Buffer.from(arrayBuffer));
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/auth/token', async (req, res) => {
+    try {
+        const request = new Request('http://localhost/api/auth/token', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(req.body)
+        });
+        const response = await authTokenHandler(request);
+        const data = await response.text();
+        res.status(response.status).json(JSON.parse(data));
+    } catch (error) {
+        console.error('Auth token error:', error);
         res.status(500).json({ error: error.message });
     }
 });

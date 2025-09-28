@@ -22,12 +22,16 @@ const CharacterInput: React.FC<CharacterInputProps> = ({ character, onChange, on
             reader.readAsDataURL(file);
         }
     };
-    
+
     const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         onChange({ ...character, name: e.target.value });
     };
 
-    const imagePreview = character.imageFile ? URL.createObjectURL(character.imageFile) : null;
+    const imagePreview = character.imageFile
+        ? URL.createObjectURL(character.imageFile)
+        : character.imageBase64
+            ? character.imageBase64
+            : null;
 
     return (
         <div className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm flex flex-col sm:flex-row gap-4 items-center">

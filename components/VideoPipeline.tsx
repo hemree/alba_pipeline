@@ -61,6 +61,9 @@ const VideoPipeline: React.FC = () => {
     const [isStitching, setIsStitching] = useState<boolean>(false);
     const [stitchingProgress, setStitchingProgress] = useState<number>(0);
     const [finalVideoUrl, setFinalVideoUrl] = useState<string | null>(null);
+    const [isGeneratingStory, setIsGeneratingStory] = useState<boolean>(false);
+    const [isGeneratingCharacter, setIsGeneratingCharacter] = useState<boolean>(false);
+    const [characterInput, setCharacterInput] = useState<string>('');
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -88,6 +91,95 @@ const VideoPipeline: React.FC = () => {
             }
             return char;
         }));
+    };
+
+    const handleGenerateStory = async () => {
+        setIsGeneratingStory(true);
+        setError(null);
+        try {
+            const characterNames = characters.filter(c => c.name.trim()).map(c => c.name.trim());
+
+            const response = await fetch('http://localhost:3001/api/generateStory', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    genre: narrativeGenre,
+                    style: visualStyle,
+                    theme: 'A compelling adventure with character development',
+                    length: 'medium',
+                    characters: characterNames.length > 0 ? characterNames : undefined
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Story generation failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            setStory(data.story);
+        } catch (e) {
+            console.error(e);
+            setError('Failed to generate story. Please try again.');
+        } finally {
+            setIsGeneratingStory(false);
+        }
+    };
+
+    const handleGenerateCharacter = async () => {
+        setIsGeneratingCharacter(true);
+        setError(null);
+        try {
+            const existingCharacterNames = characters.filter(c => c.name.trim()).map(c => c.name.trim());
+
+            const response = await fetch('http://localhost:3001/api/generateCharacter', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    genre: narrativeGenre,
+                    style: visualStyle,
+                    characterType: characterInput.trim() || 'protagonist, antagonist, or supporting character',
+                    storyContext: story.substring(0, 200) || 'An epic adventure with challenges and growth',
+                    existingCharacters: existingCharacterNames.length > 0 ? existingCharacterNames : undefined
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error(`Character generation failed: ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+
+            // Create new character with generated data
+            const newCharacter: Character = {
+                id: Date.now(),
+                name: data.character.name,
+                imageFile: null,
+                imageBase64: data.character.imageBase64 || null,
+                lockedDescription: `${data.character.description} - ${data.character.personality} - Role: ${data.character.role}`
+            };
+
+            // Add the generated character to the list
+            setCharacters([...characters, newCharacter]);
+
+            // Clear the input after successful generation
+            setCharacterInput('');
+        } catch (e) {
+            console.error(e);
+            setError('Failed to generate character. Please try again.');
+        } finally {
+            setIsGeneratingCharacter(false);
+        }
     };
 
     const handleStoryBreakdown = async () => {
@@ -145,7 +237,7 @@ const VideoPipeline: React.FC = () => {
             });
         }
     };
-    
+
     const handleTransitionChange = (sceneId: number, transition: TransitionType) => {
         setScenes(scenes.map(scene => scene.id === sceneId ? { ...scene, transitionToNext: transition } : scene));
     };
@@ -193,7 +285,7 @@ const VideoPipeline: React.FC = () => {
             error: null,
         }));
         setVideoStatuses(initialStatuses);
-        
+
         // Create the Global Bible for continuity using enriched characters
         const uniqueEnvironments = [...new Set(scenes.map(s => s.environment.trim()))]
             .map((env, index) => ({
@@ -298,18 +390,67 @@ const VideoPipeline: React.FC = () => {
                 {step === 'input' && (
                     <div className="space-y-8 animate-fade-in max-w-4xl mx-auto">
                         <div>
-                            <label htmlFor="story" className="block text-lg font-semibold mb-2 text-gray-700">Your Story</label>
+                            <div className="flex justify-between items-center mb-2">
+                                <label htmlFor="story" className="text-lg font-semibold text-gray-700">Your Story</label>
+                                <button
+                                    onClick={handleGenerateStory}
+                                    disabled={isGeneratingStory}
+                                    className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium rounded-lg hover:from-blue-600 hover:to-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md text-sm"
+                                >
+                                    {isGeneratingStory ? (
+                                        <div className="flex items-center space-x-2">
+                                            <Spinner />
+                                            <span>Generating...</span>
+                                        </div>
+                                    ) : (
+                                        '✨ Generate Story'
+                                    )}
+                                </button>
+                            </div>
                             <textarea
                                 id="story"
                                 value={story}
                                 onChange={(e) => setStory(e.target.value)}
-                                placeholder="Paste your full book or story here..."
+                                placeholder="Paste your full book or story here, or click 'Generate Story' to create one automatically..."
                                 className="w-full h-64 p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow"
                             />
                         </div>
 
                         <div>
-                            <h3 className="text-lg font-semibold mb-2 text-gray-700">Characters</h3>
+                            <h3 className="text-lg font-semibold mb-3 text-gray-700">Characters</h3>
+
+                            {/* Character Generation Section */}
+                            <div className="mb-4 p-4 bg-gray-50 rounded-lg border">
+                                <button
+                                    onClick={handleGenerateCharacter}
+                                    disabled={isGeneratingCharacter}
+                                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-3"
+                                >
+                                    {isGeneratingCharacter ? (
+                                        <div className="flex items-center gap-2">
+                                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                            <span>Generating Character...</span>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <span>🎭</span>
+                                            <span>Generate Character</span>
+                                        </>
+                                    )}
+                                </button>
+
+                                <input
+                                    type="text"
+                                    value={characterInput}
+                                    onChange={(e) => setCharacterInput(e.target.value)}
+                                    placeholder="Describe the character you want (e.g., 'brave knight', 'wise wizard', 'mysterious assassin')"
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    disabled={isGeneratingCharacter}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Leave empty for AI to decide based on your genre and style
+                                </p>
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {characters.map((char) => (
                                     <CharacterInput
@@ -439,7 +580,7 @@ const VideoPipeline: React.FC = () => {
                 {step === 'generate' && (
                     <div className="space-y-6 animate-fade-in">
                         <h2 className="text-3xl font-bold text-center">Video Generation</h2>
-                        
+
                         {generatingDescriptions && (
                             <div className="text-center p-4 bg-purple-100 rounded-lg border border-purple-200 shadow-sm">
                                 <p className="font-semibold text-purple-700 flex items-center justify-center gap-2">
@@ -448,7 +589,7 @@ const VideoPipeline: React.FC = () => {
                                 </p>
                             </div>
                         )}
-                        
+
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                             {scenes.map((scene, index) => {
                                 const status = videoStatuses.find(s => s.sceneId === scene.id);

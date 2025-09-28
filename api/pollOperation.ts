@@ -1,4 +1,6 @@
 // Server-side endpoint for polling video generation operations
+import { GoogleGenAI } from "@google/genai";
+
 export default async function handler(request: Request): Promise<Response> {
     if (request.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 });
@@ -7,19 +9,25 @@ export default async function handler(request: Request): Promise<Response> {
     try {
         const { operationName } = await request.json();
 
-        // Use API key on server-side (secure)
+        // Use new Google GenAI SDK for polling
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             throw new Error("API key is not configured.");
         }
 
-        const pollResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/operations/${operationName}?key=${apiKey}`);
+        const ai = new GoogleGenAI({
+            apiKey: apiKey
+        });
 
-        if (!pollResponse.ok) {
-            throw new Error(`Poll request failed with status ${pollResponse.status}`);
-        }
+        // Create operation object for polling
+        const operationObj = {
+            name: operationName,
+            done: false
+        };
 
-        const operation = await pollResponse.json();
+        const operation = await ai.operations.getVideosOperation({
+            operation: operationObj,
+        });
 
         return new Response(JSON.stringify(operation), {
             status: 200,

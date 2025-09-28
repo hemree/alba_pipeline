@@ -1,6 +1,7 @@
 // Server-side endpoint for video generation
 import type { Scene, Character, VideoModel } from "../types";
 import type { GlobalBible } from "../services/continuityPromptBuilder";
+import { GoogleGenAI } from "@google/genai";
 
 interface GenerateVideoRequest {
     scene: Scene;
@@ -18,24 +19,22 @@ export default async function handler(request: Request): Promise<Response> {
     try {
         const { scene, characters, globalBible, prevScene, videoModel } = await request.json() as GenerateVideoRequest;
 
-        // Step 1: Build the continuity-aware prompt
-        const continuityResponse = await fetch('/api/continuity', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                scene,
-                globalBible,
-                prevScene,
-            }),
-        });
+        // Step 1: Build the continuity-aware prompt (simplified)
+        let prompt;
 
-        if (!continuityResponse.ok) {
-            throw new Error('Failed to build continuity prompt');
+        if (request.url && request.url.includes('prompt=')) {
+            // If prompt is provided directly, use it
+            const url = new URL(request.url, 'http://localhost');
+            prompt = url.searchParams.get('prompt');
+        } else {
+            // Build a simple prompt from scene data
+            const style = globalBible?.style || 'cinematic';
+            const genre = globalBible?.genre || 'adventure';
+            const sceneDesc = scene?.scene_description || 'A scene unfolds';
+            const characters = scene?.characters?.join(', ') || 'characters';
+
+            prompt = `In a ${style} aesthetic, with the dramatic tone of a ${genre}, ${sceneDesc}. The scene features ${characters} in a compelling visual narrative.`;
         }
-
-        const prompt = await continuityResponse.text();
 
         // Step 2: Prepare image data for character references
         const imageInputs = characters
@@ -56,29 +55,31 @@ export default async function handler(request: Request): Promise<Response> {
             })
         };
 
-        // Use API key on server-side (secure)
+        // Use new Google GenAI SDK for video generation
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
             throw new Error("API key is not configured.");
         }
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${videoModel}:generateVideo?key=${apiKey}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(requestBody)
+        const ai = new GoogleGenAI({
+            apiKey: apiKey
         });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Video generation failed: ${response.status} - ${errorText}`);
-        }
-
-        const data = await response.json();
+        // Use Veo 3.0 for video generation
+        const operation = await ai.models.generateVideos({
+            model: "veo-3.0-generate-001",
+            prompt: prompt,
+            ...(imageInputs.length > 0 && {
+                referenceImages: imageInputs
+            })
+        });
 
         // Return the operation for polling
-        return new Response(JSON.stringify(data), {
+        return new Response(JSON.stringify({
+            name: operation.name,
+            done: operation.done,
+            metadata: operation.metadata
+        }), {
             status: 200,
             headers: {
                 'Content-Type': 'application/json',

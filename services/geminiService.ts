@@ -111,9 +111,9 @@ export const generateVideoForScene = async (
             throw new Error(`Video generation failed: ${operation.error.message}`);
         }
 
-        const videoUri = operation.response?.video?.uri;
-        if (!videoUri) {
-            throw new Error("Video generation completed, but no download link was found.");
+        const videoFile = operation.response?.generatedVideos?.[0]?.video;
+        if (!videoFile) {
+            throw new Error("Video generation completed, but no video file was found.");
         }
 
         // Download the generated video via server endpoint
@@ -123,7 +123,7 @@ export const generateVideoForScene = async (
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                videoUri: videoUri,
+                videoFile: videoFile,
             }),
         });
 
