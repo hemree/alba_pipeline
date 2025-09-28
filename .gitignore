@@ -28,3 +28,8 @@ dist-ssr
 *.avi
 *.mov
 *.mkv
+
+# Environment files with secrets
+.env.tsx
+.env.local
+.env
