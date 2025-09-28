@@ -177,8 +177,9 @@ export default async function handler(req: any, res: any) {
             return;
         }
 
-        const data = await response.text();
+        // Store status before consuming the body
         const statusCode = response.status;
+        const data = await response.text();
 
         if (!statusCode) {
             console.error('Response object missing status property');

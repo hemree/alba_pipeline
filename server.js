@@ -18,7 +18,7 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
 // Import API handlers
-const breakdownStoryHandler = (await import('./api/breakdownStory.ts')).default;
+const { POST: breakdownStoryHandler } = (await import('./api/breakdownStory.ts'));
 const generateStoryHandler = (await import('./api/generateStory.ts')).default;
 const generateCharacterHandler = (await import('./api/generateCharacter.ts')).default;
 const generateVideoHandler = (await import('./api/generateVideo.ts')).default;
@@ -38,8 +38,16 @@ app.post('/api/breakdownStory', async (req, res) => {
             body: JSON.stringify(req.body)
         });
         const response = await breakdownStoryHandler(request);
+        // Store status before consuming the body
+        const statusCode = response.status;
         const data = await response.text();
-        res.status(response.status).json(JSON.parse(data));
+
+        try {
+            const jsonData = JSON.parse(data);
+            res.status(statusCode).json(jsonData);
+        } catch (parseError) {
+            res.status(statusCode).send(data);
+        }
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
