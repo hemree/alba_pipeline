@@ -99,7 +99,7 @@ const VideoPipeline: React.FC = () => {
         try {
             const characterNames = characters.filter(c => c.name.trim()).map(c => c.name.trim());
 
-            const response = await fetch('http://localhost:3001/api/generateStory', {
+            const response = await fetch('/api/generateStory', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -137,7 +137,7 @@ const VideoPipeline: React.FC = () => {
         try {
             const existingCharacterNames = characters.filter(c => c.name.trim()).map(c => c.name.trim());
 
-            const response = await fetch('http://localhost:3001/api/generateCharacter', {
+            const response = await fetch('/api/generateCharacter', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

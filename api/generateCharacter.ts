@@ -18,7 +18,21 @@ interface GeneratedCharacter {
     imagePrompt: string;
 }
 
-export default async function handler(request: Request): Promise<Response> {
+export default async function handler(req: any, res: any) {
+    // Convert Vercel format to our format
+    const request = new Request(req.url, {
+        method: req.method,
+        headers: req.headers,
+        body: req.method !== 'GET' ? JSON.stringify(req.body) : undefined
+    });
+
+    const response = await handleRequest(request);
+    const data = await response.text();
+
+    res.status(response.status).json(JSON.parse(data));
+}
+
+async function handleRequest(request: Request): Promise<Response> {
     if (request.method !== 'POST') {
         return new Response('Method Not Allowed', { status: 405 });
     }
