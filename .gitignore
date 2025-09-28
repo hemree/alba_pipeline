@@ -22,3 +22,9 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Generated video files
+*.mp4
+*.avi
+*.mov
+*.mkv
