@@ -27,8 +27,16 @@ export default async function handler(req: any, res: any) {
             throw new Error('handleRequest returned undefined');
         }
 
+        // Store status before consuming the body
+        const statusCode = response.status;
         const data = await response.text();
-        res.status(response.status).json(JSON.parse(data));
+
+        try {
+            const jsonData = JSON.parse(data);
+            res.status(statusCode).json(jsonData);
+        } catch (parseError) {
+            res.status(statusCode).send(data);
+        }
     } catch (error) {
         console.error('Handler error:', error);
         res.status(500).json({ error: error instanceof Error ? error.message : 'Unknown error' });
@@ -67,7 +75,12 @@ async function handleRequest(request: Request): Promise<Response> {
             videoFeature = body.videoFeature || videoFeature;
         } else if (body.scene) {
             // Complex format: { scene, characters, globalBible, ... }
-            const { scene, characters = [], globalBible, prevScene, videoModel } = body as GenerateVideoRequest;
+            const { scene, characters = [], globalBible, prevScene, videoModel: requestVideoModel } = body as GenerateVideoRequest;
+
+            // Use the video model from the request if provided
+            if (requestVideoModel) {
+                videoModel = requestVideoModel;
+            }
 
             const sceneStyle = globalBible?.style || 'cinematic';
             const genre = globalBible?.genre || 'adventure';
