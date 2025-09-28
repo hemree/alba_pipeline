@@ -33,3 +33,7 @@ dist-ssr
 .env.tsx
 .env.local
 .env
+
+# Google Cloud Service Account Keys
+service-account-key.json
+*.json

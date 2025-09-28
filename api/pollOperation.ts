@@ -1,4 +1,5 @@
 // Server-side endpoint for polling video generation operations
+import { GoogleAuth } from 'google-auth-library';
 
 export default async function handler(req: any, res: any) {
     try {
@@ -46,27 +47,38 @@ async function handleRequest(request: Request): Promise<Response> {
             });
         }
 
-        // Get Google Cloud credentials
-        const geminiApiKey = process.env.GEMINI_API_KEY;
+        // Get OAuth2 access token
+        async function getAccessToken(): Promise<string> {
+            try {
+                const auth = new GoogleAuth({
+                    keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+                    scopes: ['https://www.googleapis.com/auth/cloud-platform']
+                });
 
-        if (!geminiApiKey) {
-            return new Response(JSON.stringify({
-                error: 'GEMINI_API_KEY not configured',
-                message: 'Please add your Gemini API key to .env.local'
-            }), {
-                status: 500,
-                headers: { 'Content-Type': 'application/json' },
-            });
+                const client = await auth.getClient();
+                const accessToken = await client.getAccessToken();
+
+                if (!accessToken.token) {
+                    throw new Error('Failed to obtain access token');
+                }
+
+                return accessToken.token;
+            } catch (error) {
+                console.error('Error getting access token:', error);
+                throw new Error(`Authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
         }
 
-        console.log('Using Gemini API Key for operation polling');
+        const accessToken = await getAccessToken();
+        console.log('Successfully obtained OAuth2 access token for operation polling');
 
         // Call Google Cloud Operations API to poll the operation status
         const response = await fetch(
-            `https://aiplatform.googleapis.com/v1/${operationName}?key=${geminiApiKey}`,
+            `https://aiplatform.googleapis.com/v1/${operationName}`,
             {
                 method: 'GET',
                 headers: {
+                    'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json',
                 },
             }

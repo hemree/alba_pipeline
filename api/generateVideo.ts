@@ -1,4 +1,45 @@
 // Server-side endpoint for video generation
+import { GoogleAuth } from 'google-auth-library';
+
+// Supported Veo models
+const SUPPORTED_VEO_MODELS = [
+    'veo-2.0-generate-001',
+    'veo-2.0-generate-exp',
+    'veo-3.0-generate-001',
+    'veo-3.0-fast-generate-001',
+    'veo-3.0-generate-preview',
+    'veo-3.0-fast-generate-preview',
+    // Fallback models
+    'gemini-2.0-flash-exp'
+] as const;
+
+type VideoModel = typeof SUPPORTED_VEO_MODELS[number];
+
+// Function to validate and get video model
+function getValidVideoModel(requestedModel?: string): VideoModel {
+    if (!requestedModel) {
+        return 'veo-3.0-generate-001'; // Default model
+    }
+
+    // Check if requested model is supported
+    if (SUPPORTED_VEO_MODELS.includes(requestedModel as VideoModel)) {
+        return requestedModel as VideoModel;
+    }
+
+    // If not supported, return default with warning
+    console.warn(`Unsupported video model: ${requestedModel}. Using default: veo-3.0-generate-001`);
+    return 'veo-3.0-generate-001';
+}
+
+// Function to check if model is Veo (real video generation)
+function isVeoModel(model: string): boolean {
+    return model.startsWith('veo-');
+}
+
+// Function to check if model is Gemini (text-only)
+function isGeminiModel(model: string): boolean {
+    return model.startsWith('gemini-');
+}
 
 interface GenerateVideoRequest {
     prompt?: string;
@@ -10,6 +51,28 @@ interface GenerateVideoRequest {
     globalBible?: any;
     prevScene?: any;
     videoModel?: string;
+}
+
+// Function to get OAuth2 access token
+async function getAccessToken(): Promise<string> {
+    try {
+        const auth = new GoogleAuth({
+            keyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS,
+            scopes: ['https://www.googleapis.com/auth/cloud-platform']
+        });
+
+        const client = await auth.getClient();
+        const accessToken = await client.getAccessToken();
+
+        if (!accessToken.token) {
+            throw new Error('Failed to obtain access token');
+        }
+
+        return accessToken.token;
+    } catch (error) {
+        console.error('Error getting access token:', error);
+        throw new Error(`Authentication failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
 }
 
 export default async function handler(req: any, res: any) {
@@ -71,7 +134,7 @@ async function handleRequest(request: Request): Promise<Response> {
             aspectRatio = body.aspectRatio || aspectRatio;
             resolution = body.resolution || resolution;
             negativePrompt = body.negativePrompt || negativePrompt;
-            videoModel = body.videoModel || videoModel;
+            videoModel = getValidVideoModel(body.videoModel);
             videoFeature = body.videoFeature || videoFeature;
         } else if (body.scene) {
             // Complex format: { scene, characters, globalBible, ... }
@@ -79,7 +142,7 @@ async function handleRequest(request: Request): Promise<Response> {
 
             // Use the video model from the request if provided
             if (requestVideoModel) {
-                videoModel = requestVideoModel;
+                videoModel = getValidVideoModel(requestVideoModel);
             }
 
             const sceneStyle = globalBible?.style || 'cinematic';
@@ -146,52 +209,81 @@ async function handleRequest(request: Request): Promise<Response> {
         }
 
         // Get Google Cloud credentials
-        const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || 'alba-media-pipeline';
+        const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || 'pipeline-473521';
         const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-        const geminiApiKey = process.env.GEMINI_API_KEY;
 
-        if (!geminiApiKey) {
+        // Get OAuth2 access token
+        let accessToken: string;
+        try {
+            accessToken = await getAccessToken();
+            console.log('Successfully obtained OAuth2 access token for video generation');
+        } catch (error) {
+            console.error('Failed to get access token:', error);
             return new Response(JSON.stringify({
-                error: 'GEMINI_API_KEY not configured',
-                message: 'Please add your Gemini API key to .env.local'
+                error: 'Authentication failed',
+                message: 'Failed to obtain Google Cloud access token',
+                details: error instanceof Error ? error.message : 'Unknown error'
             }), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' },
             });
         }
 
-        console.log('Using Gemini API Key for video generation');
+        // Prepare request based on model type
+        let veoRequest: any;
 
-        // Prepare the Veo API request
-        const veoRequest: any = {
-            model: videoModel,
-            prompt: {
-                text: prompt
-            },
-            generationConfig: {
-                aspectRatio: aspectRatio,
-                duration: `${duration}s`,
-                resolution: resolution,
-                seed: Math.floor(Math.random() * 4294967295)
+        if (isVeoModel(videoModel)) {
+            // Veo models - Real video generation
+            veoRequest = {
+                contents: [{
+                    role: "user",
+                    parts: [{
+                        text: prompt
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.7,
+                    topP: 0.8,
+                    topK: 40
+                }
+            };
+
+            // Add negative prompt for Veo models
+            if (negativePrompt) {
+                veoRequest.contents[0].parts.push({
+                    text: `Negative prompt: ${negativePrompt}`
+                });
             }
-        };
 
-        // Add negative prompt if provided
-        if (negativePrompt) {
-            veoRequest.prompt.negativeText = negativePrompt;
-        }
+            console.log(`Using Veo model: ${videoModel} for real video generation`);
+        } else {
+            // Gemini models - Text-only response (mock)
+            veoRequest = {
+                contents: [{
+                    role: "user",
+                    parts: [{
+                        text: `Generate a video description for: ${prompt}. Style: ${style}. Duration: ${duration} seconds.`
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.7,
+                    topP: 0.8,
+                    topK: 40,
+                    maxOutputTokens: 1024,
+                    responseMimeType: "application/json"
+                }
+            };
 
-        // Add audio generation if requested
-        if (videoFeature === 'video-audio') {
-            veoRequest.generationConfig.includeAudio = true;
+            console.log(`Using Gemini model: ${videoModel} for mock response`);
         }
 
         // Call Google Cloud Video AI (Veo) API
         const response = await fetch(
-            `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${videoModel}:generateContent?key=${geminiApiKey}`,
+            `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${videoModel}:generateContent`,
             {
                 method: 'POST',
                 headers: {
+                    'Authorization': `Bearer ${accessToken}`,
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(veoRequest)

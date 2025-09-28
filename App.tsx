@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
+import { SessionProvider, useSession } from 'next-auth/react';
 import Login from './components/Login';
 import VideoPipeline from './components/VideoPipeline';
 import { authService } from './services/authService';
@@ -37,4 +38,13 @@ const App: React.FC = () => {
     return <VideoPipeline />;
 };
 
-export default App;
+// Wrapper component with SessionProvider
+const AppWithAuth: React.FC = () => {
+    return (
+        <SessionProvider>
+            <App />
+        </SessionProvider>
+    );
+};
+
+export default AppWithAuth;
