@@ -290,7 +290,7 @@ const VideoPipeline: React.FC = () => {
         const uniqueEnvironments = [...new Set(scenes.map(s => s.environment.trim()))]
             .map((env, index) => ({
                 id: `env_${index + 1}`,
-                description: env,
+                description: String(env),
             }));
 
         const globalBible: GlobalBible = {

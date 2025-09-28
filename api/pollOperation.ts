@@ -33,14 +33,9 @@ async function handleRequest(request: Request): Promise<Response> {
             apiKey: apiKey
         });
 
-        // Create operation object for polling
-        const operationObj = {
-            name: operationName,
-            done: false
-        };
-
+        // Get operation status directly by name
         const operation = await ai.operations.getVideosOperation({
-            operation: operationObj,
+            operation: operationName,
         });
 
         return new Response(JSON.stringify(operation), {

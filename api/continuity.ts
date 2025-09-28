@@ -29,7 +29,7 @@ async function handleRequest(request: Request): Promise<Response> {
     // Use the AI-generated 'lockedDescription' from the GlobalBible for consistency.
     const characterBible = (globalBible && globalBible.characters && Array.isArray(globalBible.characters))
       ? globalBible.characters.map(
-        (c) => `- **${c.name}**: ${c.lockedDescription || c.description || 'No visual reference provided. Describe based on context from the story.'}`
+        (c) => `- **${c.name}**: ${c.lockedDescription || 'No visual reference provided. Describe based on context from the story.'}`
       ).join("\n")
       : "No character descriptions available";
 
@@ -154,3 +154,5 @@ ${userPrompt}
     });
   }
 }
+
+export default handleRequest;

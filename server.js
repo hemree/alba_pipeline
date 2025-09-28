@@ -155,14 +155,7 @@ app.post('/api/downloadVideo', async (req, res) => {
 
 app.post('/api/auth/token', async (req, res) => {
     try {
-        const request = new Request('http://localhost/api/auth/token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(req.body)
-        });
-        const response = await authTokenHandler(request);
-        const data = await response.text();
-        res.status(response.status).json(JSON.parse(data));
+        await authTokenHandler(req, res);
     } catch (error) {
         console.error('Auth token error:', error);
         res.status(500).json({ error: error.message });

@@ -1,5 +1,4 @@
 // Server-side endpoint for downloading generated videos
-import { GoogleGenAI } from "@google/genai";
 
 export default async function handler(req: any, res: any) {
     // Convert Vercel format to our format
@@ -29,17 +28,15 @@ async function handleRequest(request: Request): Promise<Response> {
             throw new Error("API key is not configured.");
         }
 
-        const ai = new GoogleGenAI({
-            apiKey: apiKey
-        });
+        // Use direct API call instead of SDK for file download
+        const downloadUrl = `https://generativelanguage.googleapis.com/v1beta/files/${videoFile.name}?alt=media&key=${apiKey}`;
 
-        // Download using the SDK
-        const videoData = await ai.files.download({
-            file: videoFile
-        });
+        const response = await fetch(downloadUrl);
+        if (!response.ok) {
+            throw new Error(`Failed to download video: ${response.status}`);
+        }
 
-        // Convert to array buffer for response
-        const arrayBuffer = videoData instanceof ArrayBuffer ? videoData : await videoData.arrayBuffer();
+        const arrayBuffer = await response.arrayBuffer();
 
         return new Response(arrayBuffer, {
             status: 200,
