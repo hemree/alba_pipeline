@@ -1,14 +1,15 @@
 // Server-side endpoint for video generation
-import type { Scene, Character, VideoModel } from "../types";
-import type { GlobalBible } from "../services/continuityPromptBuilder";
-import { GoogleGenAI } from "@google/genai";
 
 interface GenerateVideoRequest {
-    scene: Scene;
-    characters: Character[];
-    globalBible: GlobalBible;
-    prevScene: Scene | null;
-    videoModel: VideoModel;
+    prompt?: string;
+    style?: string;
+    duration?: number;
+    aspectRatio?: string;
+    scene?: any;
+    characters?: any[];
+    globalBible?: any;
+    prevScene?: any;
+    videoModel?: string;
 }
 
 export default async function handler(req: any, res: any) {
@@ -40,73 +41,112 @@ async function handleRequest(request: Request): Promise<Response> {
     }
 
     try {
-        const { scene, characters, globalBible, prevScene, videoModel } = await request.json() as GenerateVideoRequest;
+        console.log('generateVideo: Starting request processing');
+        const body = await request.json();
+        console.log('generateVideo: Body parsed:', JSON.stringify(body));
 
-        // Step 1: Build the continuity-aware prompt (simplified)
-        let prompt;
+        // Support both simple and complex request formats
+        let prompt: string;
+        let style = 'cinematic';
+        let duration = 8;
+        let aspectRatio = '16:9';
 
-        if (request.url && request.url.includes('prompt=')) {
-            // If prompt is provided directly, use it
-            const url = new URL(request.url, 'http://localhost');
-            prompt = url.searchParams.get('prompt');
-        } else {
-            // Build a simple prompt from scene data
-            const style = globalBible?.style || 'cinematic';
+        if (body.prompt) {
+            // Simple format: { prompt, style?, duration?, aspectRatio? }
+            prompt = body.prompt;
+            style = body.style || style;
+            duration = body.duration || duration;
+            aspectRatio = body.aspectRatio || aspectRatio;
+        } else if (body.scene) {
+            // Complex format: { scene, characters, globalBible, ... }
+            const { scene, characters = [], globalBible, prevScene, videoModel } = body as GenerateVideoRequest;
+
+            const sceneStyle = globalBible?.style || 'cinematic';
             const genre = globalBible?.genre || 'adventure';
             const sceneDesc = scene?.scene_description || 'A scene unfolds';
-            const characters = scene?.characters?.join(', ') || 'characters';
+            const characterNames = (scene?.characters && Array.isArray(scene.characters)) ? scene.characters.join(', ') : 'characters';
 
-            prompt = `In a ${style} aesthetic, with the dramatic tone of a ${genre}, ${sceneDesc}. The scene features ${characters} in a compelling visual narrative.`;
+            prompt = `In a ${sceneStyle} aesthetic, with the dramatic tone of a ${genre}, ${sceneDesc}. The scene features ${characterNames} in a compelling visual narrative.`;
+            style = sceneStyle;
+        } else {
+            return new Response(JSON.stringify({ error: 'Either prompt or scene is required' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
-        // Step 2: Prepare image data for character references
-        const imageInputs = characters
-            .filter(c => c.imageBase64)
-            .map(c => ({
-                inlineData: {
-                    data: c.imageBase64!.split(',')[1], // Remove data:image/jpeg;base64, prefix
-                    mimeType: c.imageFile?.type || 'image/jpeg'
-                }
-            }));
+        if (!prompt) {
+            return new Response(JSON.stringify({ error: 'Prompt is required' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
 
-        // Step 3: Generate video using Veo API
-        const requestBody = {
-            model: videoModel,
-            prompt: prompt,
-            ...(imageInputs.length > 0 && {
-                referenceImages: imageInputs
-            })
+        // Get Google Cloud credentials
+        const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID || 'alba-media-pipeline';
+        const location = 'us-central1';
+        const apiKey = process.env.GOOGLE_API_KEY;
+
+        if (!apiKey) {
+            return new Response(JSON.stringify({ error: 'Google API key not configured' }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+
+        // Prepare the Veo API request
+        const veoRequest = {
+            model: 'veo-3.0-generate-001',
+            prompt: {
+                text: prompt
+            },
+            generationConfig: {
+                aspectRatio: aspectRatio,
+                duration: `${duration}s`,
+                seed: Math.floor(Math.random() * 4294967295)
+            }
         };
 
-        // Use new Google GenAI SDK for video generation
-        const apiKey = process.env.GEMINI_API_KEY;
-        if (!apiKey) {
-            throw new Error("API key is not configured.");
+        // Call Google Cloud Video AI (Veo) API
+        const response = await fetch(
+            `https://aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/veo-3.0-generate-001:generateContent`,
+            {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(veoRequest)
+            }
+        );
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Veo API error:', errorText);
+            return new Response(JSON.stringify({
+                error: `Video generation failed: ${response.status} ${response.statusText}`,
+                details: errorText
+            }), {
+                status: response.status,
+                headers: { 'Content-Type': 'application/json' },
+            });
         }
 
-        const ai = new GoogleGenAI({
-            apiKey: apiKey
-        });
+        const result = await response.json();
 
-        // Use Veo 3.0 for video generation
-        const operation = await ai.models.generateVideos({
-            model: "veo-3.0-generate-001",
-            prompt: prompt,
-            ...(imageInputs.length > 0 && {
-                referenceImages: imageInputs
-            })
-        });
-
-        // Return the operation for polling
+        // Return the operation name for polling
         return new Response(JSON.stringify({
-            name: operation.name,
-            done: operation.done,
-            metadata: operation.metadata
+            operationName: result.name || `projects/${projectId}/locations/${location}/operations/video-${Date.now()}`,
+            status: 'generating',
+            message: 'Video generation started successfully',
+            prompt: prompt,
+            style: style,
+            duration: duration,
+            aspectRatio: aspectRatio,
+            model: 'veo-3.0-generate-001'
         }), {
             status: 200,
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
         });
 
     } catch (error) {

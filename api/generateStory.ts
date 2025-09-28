@@ -59,26 +59,16 @@ async function handleRequest(request: Request): Promise<Response> {
             ? `The story should feature these characters: ${characters.join(', ')}.`
             : 'Create compelling characters that fit the story.';
 
-        const prompt = `Generate an engaging ${genre || 'adventure'} story with a ${style || 'cinematic'} visual style.
+        const prompt = `Write a ${genre || 'adventure'} story (${lengthGuide[length]}).
 
 ${characterPrompt}
 
-Story requirements:
-- Length: ${lengthGuide[length]}
-- Theme: ${theme || 'A hero\'s journey with challenges and growth'}
-- Visual style: ${style || 'Cinematic and dramatic'}
-- Genre: ${genre || 'Adventure'}
+Requirements:
+- Visual and cinematic style
+- Clear scenes for video adaptation
+- Beginning, middle, end structure
 
-The story should be:
-- Visually rich and descriptive
-- Suitable for video adaptation
-- Have clear scenes and action sequences
-- Include character development
-- Have a satisfying beginning, middle, and end
-
-Please write a complete story that flows naturally and would work well when broken down into individual video scenes. Focus on visual storytelling and dramatic moments.
-
-Story:`;
+Write the story:`;
 
         // Use direct API call instead of SDK for better compatibility
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {

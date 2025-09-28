@@ -60,20 +60,24 @@ async function handleRequest(request: Request): Promise<Response> {
             ? `Existing characters in the story: ${existingCharacters.join(', ')}. Make sure this new character is unique and complements them.`
             : 'This is the first character in the story.';
 
-        const characterPrompt = `Create a character for a ${genre || 'adventure'} story.
+        const storyContextText = storyContext
+            ? `\n\nStory Context: ${storyContext.substring(0, 800)}\n\nCreate a character that fits this story.`
+            : '';
 
-Generate a character with name, description, personality, role, and image prompt.
+        const characterPrompt = `Create a character for a ${genre || 'adventure'} story.${storyContextText}
 
-Example response:
+${existingCharsText}
+
+Return JSON format:
 {
-  "name": "Lyra Stormwind",
-  "description": "A tall warrior with silver hair and blue eyes",
-  "personality": "Brave, determined, loyal, quick-witted",
-  "role": "protagonist",
-  "imagePrompt": "A brave female warrior with silver hair and blue eyes in fantasy armor"
+  "name": "Character Name",
+  "description": "Physical description",
+  "personality": "Key traits",
+  "role": "protagonist/antagonist/supporting",
+  "imagePrompt": "Visual description for image generation"
 }
 
-Now create a unique character:`;
+Create a unique character:`;
 
         // Generate character description
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {

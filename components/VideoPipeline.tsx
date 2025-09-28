@@ -77,11 +77,11 @@ const VideoPipeline: React.FC = () => {
     };
 
     const handleRemoveCharacter = (id: number) => {
-        setCharacters(characters.filter(char => char.id !== id));
+        setCharacters(characters.filter((char: Character) => char.id !== id));
     };
 
     const handleCharacterChange = (id: number, updatedCharacter: Character) => {
-        setCharacters(characters.map(char => {
+        setCharacters(characters.map((char: Character) => {
             if (char.id === id) {
                 // If image is changed, invalidate the old description so it gets regenerated.
                 if (char.imageBase64 !== updatedCharacter.imageBase64) {
@@ -97,7 +97,7 @@ const VideoPipeline: React.FC = () => {
         setIsGeneratingStory(true);
         setError(null);
         try {
-            const characterNames = characters.filter(c => c.name.trim()).map(c => c.name.trim());
+            const characterNames = characters.filter((c: Character) => c.name.trim()).map((c: Character) => c.name.trim());
 
             const response = await fetch('/api/generateStory', {
                 method: 'POST',
@@ -135,7 +135,7 @@ const VideoPipeline: React.FC = () => {
         setIsGeneratingCharacter(true);
         setError(null);
         try {
-            const existingCharacterNames = characters.filter(c => c.name.trim()).map(c => c.name.trim());
+            const existingCharacterNames = characters.filter((c: Character) => c.name.trim()).map((c: Character) => c.name.trim());
 
             const response = await fetch('/api/generateCharacter', {
                 method: 'POST',
@@ -146,7 +146,7 @@ const VideoPipeline: React.FC = () => {
                     genre: narrativeGenre,
                     style: visualStyle,
                     characterType: characterInput.trim() || 'protagonist, antagonist, or supporting character',
-                    storyContext: story.substring(0, 200) || 'An epic adventure with challenges and growth',
+                    storyContext: story || 'An epic adventure with challenges and growth',
                     existingCharacters: existingCharacterNames.length > 0 ? existingCharacterNames : undefined
                 })
             });
@@ -182,6 +182,99 @@ const VideoPipeline: React.FC = () => {
         }
     };
 
+    const handleExtractAndGenerateCharacters = async () => {
+        if (!story.trim()) {
+            setError('Please generate a story first.');
+            return;
+        }
+
+        setIsGeneratingCharacter(true);
+        setError(null);
+
+        try {
+            // Step 1: Extract characters from story
+            const extractResponse = await fetch('/api/extractCharacters', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ story })
+            });
+
+            const extractData = await extractResponse.json();
+            if (extractData.error) {
+                throw new Error(extractData.error);
+            }
+
+            const extractedCharacters = extractData.characters || [];
+
+            if (extractedCharacters.length === 0) {
+                setError('No characters found in the story.');
+                return;
+            }
+
+            // Step 2: Generate each character
+            const newCharacters: Character[] = [];
+            const existingCharacterNames = characters.filter((c: Character) => c.name.trim()).map((c: Character) => c.name.trim());
+
+            for (const extractedChar of extractedCharacters) {
+                // Skip if character already exists
+                if (existingCharacterNames.includes(extractedChar.name)) {
+                    continue;
+                }
+
+                try {
+                    const response = await fetch('/api/generateCharacter', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            genre: narrativeGenre,
+                            style: visualStyle,
+                            characterType: extractedChar.characterType,
+                            storyContext: story,
+                            existingCharacters: [...existingCharacterNames, ...newCharacters.map(c => c.name)]
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (data.error) {
+                        console.error(`Failed to generate character ${extractedChar.name}:`, data.error);
+                        continue;
+                    }
+
+                    // Create new character with generated data
+                    const newCharacter: Character = {
+                        id: Date.now() + Math.random(),
+                        name: data.character.name,
+                        imageFile: null,
+                        imageBase64: data.character.imageBase64 || null,
+                        lockedDescription: `${data.character.description} - ${data.character.personality} - Role: ${data.character.role}`
+                    };
+
+                    newCharacters.push(newCharacter);
+
+                    // Small delay between generations to avoid rate limiting
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+
+                } catch (charError) {
+                    console.error(`Error generating character ${extractedChar.name}:`, charError);
+                }
+            }
+
+            // Add all generated characters to the list
+            if (newCharacters.length > 0) {
+                setCharacters([...characters, ...newCharacters]);
+                setError(null);
+            } else {
+                setError('Failed to generate any characters from the story.');
+            }
+
+        } catch (e) {
+            console.error(e);
+            setError('Failed to extract and generate characters. Please try again.');
+        } finally {
+            setIsGeneratingCharacter(false);
+        }
+    };
+
     const handleStoryBreakdown = async () => {
         if (!story.trim()) {
             setError('Please enter a story.');
@@ -190,7 +283,7 @@ const VideoPipeline: React.FC = () => {
         setIsLoading(true);
         setError(null);
         try {
-            const characterDescriptions = characters.filter(c => c.name).map(c => c.name);
+            const characterDescriptions = characters.filter((c: Character) => c.name).map((c: Character) => c.name);
             const generatedScenesData = await breakdownStoryIntoScenes(story, characterDescriptions);
             const generatedScenesWithIds = generatedScenesData.map((scene, index) => ({
                 ...scene,
@@ -208,11 +301,11 @@ const VideoPipeline: React.FC = () => {
     };
 
     const handleUpdateScene = (updatedScene: Scene) => {
-        setScenes(scenes.map(scene => scene.id === updatedScene.id ? updatedScene : scene));
+        setScenes(scenes.map((scene: Scene) => scene.id === updatedScene.id ? updatedScene : scene));
     };
 
     const handleDeleteScene = (id: number) => {
-        setScenes(scenes.filter(scene => scene.id !== id));
+        setScenes(scenes.filter((scene: Scene) => scene.id !== id));
     };
 
     const handleAddScene = () => {
@@ -230,16 +323,16 @@ const VideoPipeline: React.FC = () => {
     const handleDragEnd = (event: any) => {
         const { active, over } = event;
         if (active.id !== over.id) {
-            setScenes((items) => {
-                const oldIndex = items.findIndex(item => item.id === active.id);
-                const newIndex = items.findIndex(item => item.id === over.id);
+            setScenes((items: Scene[]) => {
+                const oldIndex = items.findIndex((item: Scene) => item.id === active.id);
+                const newIndex = items.findIndex((item: Scene) => item.id === over.id);
                 return arrayMove(items, oldIndex, newIndex);
             });
         }
     };
 
     const handleTransitionChange = (sceneId: number, transition: TransitionType) => {
-        setScenes(scenes.map(scene => scene.id === sceneId ? { ...scene, transitionToNext: transition } : scene));
+        setScenes(scenes.map((scene: Scene) => scene.id === sceneId ? { ...scene, transitionToNext: transition } : scene));
     };
 
     const handleVideoGeneration = useCallback(async () => {
@@ -255,7 +348,7 @@ const VideoPipeline: React.FC = () => {
         let enrichedCharacters: Character[];
         try {
             enrichedCharacters = await Promise.all(
-                characters.map(async (char) => {
+                characters.map(async (char: Character) => {
                     // Only generate if there's an image and no description has been locked yet.
                     if (char.imageBase64 && char.imageFile && !char.lockedDescription) {
                         const description = await generateCharacterDescription(char);
@@ -277,7 +370,7 @@ const VideoPipeline: React.FC = () => {
         }
 
         // Step 2: Proceed with video generation using the enriched character data.
-        const initialStatuses: VideoGenerationStatus[] = scenes.map((scene, index) => ({
+        const initialStatuses: VideoGenerationStatus[] = scenes.map((scene: Scene, index: number) => ({
             sceneIndex: index,
             sceneId: scene.id,
             status: 'pending',
@@ -287,7 +380,7 @@ const VideoPipeline: React.FC = () => {
         setVideoStatuses(initialStatuses);
 
         // Create the Global Bible for continuity using enriched characters
-        const uniqueEnvironments = [...new Set(scenes.map(s => s.environment.trim()))]
+        const uniqueEnvironments = [...new Set(scenes.map((s: Scene) => s.environment.trim()))]
             .map((env, index) => ({
                 id: `env_${index + 1}`,
                 description: String(env),
@@ -305,20 +398,20 @@ const VideoPipeline: React.FC = () => {
 
         for (let i = 0; i < scenes.length; i++) {
             const currentScene = scenes[i];
-            setVideoStatuses(prev => prev.map(s => s.sceneId === currentScene.id ? { ...s, status: 'generating' } : s));
+            setVideoStatuses((prev: VideoGenerationStatus[]) => prev.map((s: VideoGenerationStatus) => s.sceneId === currentScene.id ? { ...s, status: 'generating' } : s));
             try {
                 const prevScene = i > 0 ? scenes[i - 1] : null;
                 const videoUrl = await generateVideoForScene(currentScene, enrichedCharacters, globalBible, prevScene, (op) => {
                     if (!op.done) {
-                        setVideoStatuses(prev => prev.map(s => s.sceneId === currentScene.id ? { ...s, status: 'polling' } : s));
+                        setVideoStatuses((prev: VideoGenerationStatus[]) => prev.map((s: VideoGenerationStatus) => s.sceneId === currentScene.id ? { ...s, status: 'polling' } : s));
                     }
                 }, videoModel);
-                setVideoStatuses(prev => prev.map(s => s.sceneId === currentScene.id ? { ...s, status: 'complete', videoUrl } : s));
+                setVideoStatuses((prev: VideoGenerationStatus[]) => prev.map((s: VideoGenerationStatus) => s.sceneId === currentScene.id ? { ...s, status: 'complete', videoUrl } : s));
                 generatedVideos.push({ url: videoUrl, sceneId: currentScene.id });
             } catch (e) {
                 console.error(`Failed to generate video for scene ${i + 1}:`, e);
                 const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-                setVideoStatuses(prev => prev.map(s => s.sceneId === currentScene.id ? { ...s, status: 'error', error: errorMessage } : s));
+                setVideoStatuses((prev: VideoGenerationStatus[]) => prev.map((s: VideoGenerationStatus) => s.sceneId === currentScene.id ? { ...s, status: 'error', error: errorMessage } : s));
                 generationFailed = true;
                 break; // Stop generation if one scene fails
             }
@@ -329,13 +422,13 @@ const VideoPipeline: React.FC = () => {
             setStitchingProgress(0);
             try {
                 // Map generated URLs back to the current (potentially reordered) scene list
-                const videosToStitch = scenes.map(scene => {
-                    const foundVideo = generatedVideos.find(v => v.sceneId === scene.id);
+                const videosToStitch = scenes.map((scene: Scene) => {
+                    const foundVideo = generatedVideos.find((v: any) => v.sceneId === scene.id);
                     return {
                         url: foundVideo!.url,
                         transition: scene.transitionToNext,
                     };
-                }).filter(v => v.url); // Ensure we only have videos with URLs
+                }).filter((v: any) => v.url); // Ensure we only have videos with URLs
 
                 const finalUrl = await stitchVideos(videosToStitch, (progress) => {
                     setStitchingProgress(progress);
@@ -367,7 +460,7 @@ const VideoPipeline: React.FC = () => {
         setStep('input');
     };
 
-    const isGenerating = generatingDescriptions || videoStatuses.some(s => ['generating', 'polling'].includes(s.status)) || isStitching;
+    const isGenerating = generatingDescriptions || videoStatuses.some((s: VideoGenerationStatus) => ['generating', 'polling'].includes(s.status)) || isStitching;
 
     return (
         <div className="min-h-screen bg-[#FDFBF6] text-gray-800 flex flex-col items-center p-4 sm:p-8 font-sans">
@@ -410,7 +503,7 @@ const VideoPipeline: React.FC = () => {
                             <textarea
                                 id="story"
                                 value={story}
-                                onChange={(e) => setStory(e.target.value)}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setStory(e.target.value)}
                                 placeholder="Paste your full book or story here, or click 'Generate Story' to create one automatically..."
                                 className="w-full h-64 p-4 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow"
                             />
@@ -442,7 +535,7 @@ const VideoPipeline: React.FC = () => {
                                 <input
                                     type="text"
                                     value={characterInput}
-                                    onChange={(e) => setCharacterInput(e.target.value)}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCharacterInput(e.target.value)}
                                     placeholder="Describe the character you want (e.g., 'brave knight', 'wise wizard', 'mysterious assassin')"
                                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                                     disabled={isGeneratingCharacter}
@@ -451,12 +544,38 @@ const VideoPipeline: React.FC = () => {
                                     Leave empty for AI to decide based on your genre and style
                                 </p>
                             </div>
+
+                            {/* Extract Characters from Story Section */}
+                            {story.trim() && (
+                                <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                    <button
+                                        onClick={handleExtractAndGenerateCharacters}
+                                        disabled={isGeneratingCharacter}
+                                        className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-green-500 to-blue-600 text-white hover:from-green-600 hover:to-blue-700 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {isGeneratingCharacter ? (
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                                <span>Extracting & Generating Characters...</span>
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <span>🔍</span>
+                                                <span>Extract Characters from Story</span>
+                                            </>
+                                        )}
+                                    </button>
+                                    <p className="text-xs text-blue-600 mt-2">
+                                        Automatically find all characters mentioned in your story and generate them with AI
+                                    </p>
+                                </div>
+                            )}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {characters.map((char) => (
+                                {characters.map((char: Character) => (
                                     <CharacterInput
                                         key={char.id}
                                         character={char}
-                                        onChange={(updated) => handleCharacterChange(char.id, updated)}
+                                        onChange={(updated: Character) => handleCharacterChange(char.id, updated)}
                                         onRemove={() => handleRemoveCharacter(char.id)}
                                         isRemovable={characters.length > 1}
                                     />
@@ -475,7 +594,7 @@ const VideoPipeline: React.FC = () => {
                                     <select
                                         id="visual-style"
                                         value={visualStyle}
-                                        onChange={(e) => setVisualStyle(e.target.value)}
+                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setVisualStyle(e.target.value)}
                                         className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow appearance-none"
                                     >
                                         {visualStyleOptions.map(opt => (
@@ -493,7 +612,7 @@ const VideoPipeline: React.FC = () => {
                                     <select
                                         id="narrative-genre"
                                         value={narrativeGenre}
-                                        onChange={(e) => setNarrativeGenre(e.target.value)}
+                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setNarrativeGenre(e.target.value)}
                                         className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow appearance-none"
                                     >
                                         {narrativeGenreOptions.map(opt => (
@@ -511,7 +630,7 @@ const VideoPipeline: React.FC = () => {
                                     <select
                                         id="video-model"
                                         value={videoModel}
-                                        onChange={(e) => setVideoModel(e.target.value as VideoModel)}
+                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setVideoModel(e.target.value as VideoModel)}
                                         className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow appearance-none"
                                     >
                                         {videoModelOptions.map(opt => (
@@ -544,9 +663,9 @@ const VideoPipeline: React.FC = () => {
                             </button>
                         </div>
                         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-                            <SortableContext items={scenes.map(s => s.id)} strategy={verticalListSortingStrategy}>
+                            <SortableContext items={scenes.map((s: Scene) => s.id)} strategy={verticalListSortingStrategy}>
                                 <div className="space-y-4">
-                                    {scenes.map((scene, index) => (
+                                    {scenes.map((scene: Scene, index: number) => (
                                         <div key={scene.id} className="flex items-center w-full">
                                             <SortableSceneCard
                                                 scene={scene}
@@ -557,7 +676,7 @@ const VideoPipeline: React.FC = () => {
                                             {index < scenes.length - 1 && (
                                                 <TransitionSelector
                                                     value={scene.transitionToNext}
-                                                    onChange={(newTransition) => handleTransitionChange(scene.id, newTransition)}
+                                                    onChange={(newTransition: TransitionType) => handleTransitionChange(scene.id, newTransition)}
                                                 />
                                             )}
                                         </div>
@@ -591,8 +710,8 @@ const VideoPipeline: React.FC = () => {
                         )}
 
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {scenes.map((scene, index) => {
-                                const status = videoStatuses.find(s => s.sceneId === scene.id);
+                            {scenes.map((scene: Scene, index: number) => {
+                                const status = videoStatuses.find((s: VideoGenerationStatus) => s.sceneId === scene.id);
                                 return status ? <VideoPlayer key={scene.id} scene={scene} status={status} sceneNumber={index + 1} /> : null;
                             })}
                         </div>

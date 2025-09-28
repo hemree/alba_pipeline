@@ -73,7 +73,7 @@ Character Name: ${name}
         }
 
         // Call the Gemini API with multimodal input
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -104,14 +104,14 @@ Character Name: ${name}
         const data = await response.json();
         const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        if (!text.trim()) {
+        if (!text || !text.trim()) {
             // Corrected: Updated error message for Gemini.
             throw new Error("Gemini model returned an empty description.");
         }
 
-        return new Response(text.trim(), {
+        return new Response(JSON.stringify({ description: text.trim() }), {
             status: 200,
-            headers: { 'Content-Type': 'text/plain' },
+            headers: { 'Content-Type': 'application/json' },
         });
 
     } catch (err) {

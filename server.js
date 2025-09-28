@@ -27,6 +27,7 @@ const describeCharacterHandler = (await import('./api/describeCharacter.ts')).de
 const pollOperationHandler = (await import('./api/pollOperation.ts')).default;
 const downloadVideoHandler = (await import('./api/downloadVideo.ts')).default;
 const authTokenHandler = (await import('./api/auth/token.ts')).default;
+const extractCharactersHandler = (await import('./api/extractCharacters.ts')).default;
 
 // API Routes
 app.post('/api/breakdownStory', async (req, res) => {
@@ -64,8 +65,10 @@ app.post('/api/generateCharacter', async (req, res) => {
 
 app.post('/api/generateVideo', async (req, res) => {
     try {
+        console.log('Server: generateVideo route called');
         await generateVideoHandler(req, res);
     } catch (error) {
+        console.error('Server: generateVideo error:', error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -98,6 +101,15 @@ app.post('/api/downloadVideo', async (req, res) => {
     try {
         await downloadVideoHandler(req, res);
     } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+app.post('/api/extractCharacters', async (req, res) => {
+    try {
+        await extractCharactersHandler(req, res);
+    } catch (error) {
+        console.error('Extract characters error:', error);
         res.status(500).json({ error: error.message });
     }
 });
