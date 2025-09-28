@@ -1,9 +1,9 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 import type { Character, Scene, VideoGenerationStatus, AppStep, VideoModel, TransitionType } from '../types';
-import { breakdownStoryIntoScenes, generateVideoForScene } from '../services/geminiService';
+import { breakdownStoryIntoScenes, generateVideoForScene, generateMusicDescriptionFromStory } from '../services/geminiService';
 import { generateCharacterDescription } from '../services/characterDescriptorService';
 import { stitchVideos } from '../services/videoStitchingService';
 import type { GlobalBible } from '../services/continuityPromptBuilder';
@@ -41,9 +41,47 @@ const narrativeGenreOptions = [
     'Adventure / Quest',
 ];
 
-const videoModelOptions: { label: string; value: VideoModel }[] = [
-    { label: "Veo 2", value: "veo-2.0-generate-001" },
-    { label: "Veo 3", value: "veo-3.0-generate-001" },
+const videoModelOptions = [
+    {
+        label: "Veo 3 + Audio (Best Quality)",
+        value: "veo-3.0-generate-001",
+        feature: "video-audio",
+        price: "$0.40/sec",
+        resolution: ["720p", "1080p"],
+        description: "Highest quality with synchronized audio"
+    },
+    {
+        label: "Veo 3 (Video Only)",
+        value: "veo-3.0-generate-001",
+        feature: "video-only",
+        price: "$0.20/sec",
+        resolution: ["720p", "1080p"],
+        description: "High quality video without audio"
+    },
+    {
+        label: "Veo 3 Fast + Audio (Balanced)",
+        value: "veo-3.0-fast-generate-001",
+        feature: "video-audio",
+        price: "$0.15/sec",
+        resolution: ["720p", "1080p"],
+        description: "Fast generation with audio"
+    },
+    {
+        label: "Veo 3 Fast (Video Only)",
+        value: "veo-3.0-fast-generate-001",
+        feature: "video-only",
+        price: "$0.10/sec",
+        resolution: ["720p", "1080p"],
+        description: "Fastest and most economical"
+    },
+    {
+        label: "Veo 2 (Legacy)",
+        value: "veo-2.0-generate-001",
+        feature: "video-only",
+        price: "$0.50/sec",
+        resolution: ["720p"],
+        description: "Legacy model, 720p only"
+    }
 ];
 
 const VideoPipeline: React.FC = () => {
@@ -52,7 +90,12 @@ const VideoPipeline: React.FC = () => {
     const [characters, setCharacters] = useState<Character[]>([{ id: Date.now(), name: '', imageFile: null, imageBase64: null, lockedDescription: null }]);
     const [visualStyle, setVisualStyle] = useState<string>(visualStyleOptions[0]);
     const [narrativeGenre, setNarrativeGenre] = useState<string>(narrativeGenreOptions[0]);
-    const [videoModel, setVideoModel] = useState<VideoModel>(videoModelOptions[0].value);
+    const [selectedVideoOption, setSelectedVideoOption] = useState(videoModelOptions[0]);
+    const [resolution, setResolution] = useState<string>("720p");
+    const [negativePrompt, setNegativePrompt] = useState<string>("");
+    const [musicPrompt, setMusicPrompt] = useState<string>("");
+    const [musicNegativePrompt, setMusicNegativePrompt] = useState<string>("");
+    const [generateMusic, setGenerateMusic] = useState<boolean>(false);
     const [scenes, setScenes] = useState<Scene[]>([]);
     const [videoStatuses, setVideoStatuses] = useState<VideoGenerationStatus[]>([]);
     const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -64,6 +107,23 @@ const VideoPipeline: React.FC = () => {
     const [isGeneratingStory, setIsGeneratingStory] = useState<boolean>(false);
     const [isGeneratingCharacter, setIsGeneratingCharacter] = useState<boolean>(false);
     const [characterInput, setCharacterInput] = useState<string>('');
+
+    // Auto-generate music description from story
+    useEffect(() => {
+        const generateMusicDesc = async () => {
+            if (story.trim() && generateMusic) {
+                try {
+                    const musicDesc = await generateMusicDescriptionFromStory(story);
+                    setMusicPrompt(musicDesc);
+                } catch (error) {
+                    console.error('Error generating music description:', error);
+                }
+            }
+        };
+
+        const timeoutId = setTimeout(generateMusicDesc, 1000); // Debounce
+        return () => clearTimeout(timeoutId);
+    }, [story, generateMusic]);
 
     const sensors = useSensors(
         useSensor(PointerSensor),
@@ -405,7 +465,12 @@ const VideoPipeline: React.FC = () => {
                     if (!op.done) {
                         setVideoStatuses((prev: VideoGenerationStatus[]) => prev.map((s: VideoGenerationStatus) => s.sceneId === currentScene.id ? { ...s, status: 'polling' } : s));
                     }
-                }, videoModel);
+                }, {
+                    model: selectedVideoOption.value as VideoModel,
+                    feature: selectedVideoOption.feature,
+                    resolution: resolution,
+                    negativePrompt: negativePrompt
+                });
                 setVideoStatuses((prev: VideoGenerationStatus[]) => prev.map((s: VideoGenerationStatus) => s.sceneId === currentScene.id ? { ...s, status: 'complete', videoUrl } : s));
                 generatedVideos.push({ url: videoUrl, sceneId: currentScene.id });
             } catch (e) {
@@ -443,14 +508,19 @@ const VideoPipeline: React.FC = () => {
             }
         }
 
-    }, [scenes, characters, visualStyle, narrativeGenre, videoModel]);
+    }, [scenes, characters, visualStyle, narrativeGenre, selectedVideoOption]);
 
     const handleReset = () => {
         setStory('');
         setCharacters([{ id: Date.now(), name: '', imageFile: null, imageBase64: null, lockedDescription: null }]);
         setVisualStyle(visualStyleOptions[0]);
         setNarrativeGenre(narrativeGenreOptions[0]);
-        setVideoModel(videoModelOptions[0].value);
+        setSelectedVideoOption(videoModelOptions[0]);
+        setResolution("720p");
+        setNegativePrompt("");
+        setMusicPrompt("");
+        setMusicNegativePrompt("");
+        setGenerateMusic(false);
         setScenes([]);
         setVideoStatuses([]);
         setError(null);
@@ -625,22 +695,132 @@ const VideoPipeline: React.FC = () => {
                                 </div>
                             </div>
                             <div className="md:col-span-2 lg:col-span-1">
-                                <label htmlFor="video-model" className="block text-lg font-semibold mb-2 text-gray-700">Video Model</label>
+                                <label htmlFor="video-model" className="block text-lg font-semibold mb-2 text-gray-700">Video Model & Features</label>
                                 <div className="relative">
                                     <select
                                         id="video-model"
-                                        value={videoModel}
-                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setVideoModel(e.target.value as VideoModel)}
+                                        value={`${selectedVideoOption.value}-${selectedVideoOption.feature}`}
+                                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                                            const selectedOption = videoModelOptions.find(opt =>
+                                                `${opt.value}-${opt.feature}` === e.target.value
+                                            );
+                                            if (selectedOption) {
+                                                setSelectedVideoOption(selectedOption);
+                                                // Reset resolution if not supported
+                                                if (!selectedOption.resolution.includes(resolution)) {
+                                                    setResolution(selectedOption.resolution[0]);
+                                                }
+                                            }
+                                        }}
                                         className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow appearance-none"
                                     >
                                         {videoModelOptions.map(opt => (
-                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                            <option key={`${opt.value}-${opt.feature}`} value={`${opt.value}-${opt.feature}`}>
+                                                {opt.label} - {opt.price}
+                                            </option>
                                         ))}
                                     </select>
                                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                                         <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
                                     </div>
                                 </div>
+                                <p className="text-xs text-gray-500 mt-1">{selectedVideoOption.description}</p>
+                            </div>
+
+                            {/* Resolution Selection */}
+                            <div className="md:col-span-1">
+                                <label htmlFor="resolution" className="block text-lg font-semibold mb-2 text-gray-700">Resolution</label>
+                                <div className="relative">
+                                    <select
+                                        id="resolution"
+                                        value={resolution}
+                                        onChange={(e) => setResolution(e.target.value)}
+                                        className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow appearance-none"
+                                    >
+                                        {selectedVideoOption.resolution.map(res => (
+                                            <option key={res} value={res}>{res}</option>
+                                        ))}
+                                    </select>
+                                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                                        <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" /></svg>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Negative Prompt */}
+                            <div className="md:col-span-2">
+                                <label htmlFor="negative-prompt" className="block text-lg font-semibold mb-2 text-gray-700">Negative Prompt (Optional)</label>
+                                <textarea
+                                    id="negative-prompt"
+                                    value={negativePrompt}
+                                    onChange={(e) => setNegativePrompt(e.target.value)}
+                                    placeholder="What you DON'T want in the video (e.g., blurry, low quality, distorted faces)"
+                                    className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow resize-none"
+                                    rows={2}
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Specify elements to avoid in the generated video</p>
+                            </div>
+                        </div>
+
+                        {/* Music Generation Section */}
+                        <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl border border-purple-200">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+                                    <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM15.657 6.343a1 1 0 011.414 0A9.972 9.972 0 0119 12a9.972 9.972 0 01-1.929 5.657 1 1 0 11-1.414-1.414A7.971 7.971 0 0017 12a7.971 7.971 0 00-1.343-4.243 1 1 0 010-1.414z" clipRule="evenodd" />
+                                        <path fillRule="evenodd" d="M13.828 8.172a1 1 0 011.414 0A5.983 5.983 0 0117 12a5.983 5.983 0 01-1.758 3.828 1 1 0 11-1.414-1.414A3.987 3.987 0 0015 12a3.987 3.987 0 00-1.172-2.828 1 1 0 010-1.414z" clipRule="evenodd" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <h3 className="text-xl font-bold text-gray-800">Background Music Generation</h3>
+                                    <p className="text-sm text-gray-600">Generate AI music with Lyria 2 ($0.06 per 30 seconds)</p>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Enable Music Generation */}
+                                <div className="md:col-span-2">
+                                    <label className="flex items-center gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            checked={generateMusic}
+                                            onChange={(e) => setGenerateMusic(e.target.checked)}
+                                            className="w-5 h-5 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500 focus:ring-2"
+                                        />
+                                        <span className="text-lg font-semibold text-gray-700">Generate background music for videos</span>
+                                    </label>
+                                </div>
+
+                                {generateMusic && (
+                                    <>
+                                        {/* Auto-Generated Music Description */}
+                                        <div className="md:col-span-2">
+                                            <label htmlFor="music-prompt" className="block text-lg font-semibold mb-2 text-gray-700">Auto-Generated Music Description</label>
+                                            <div className="w-full p-3 bg-gray-50 border border-gray-200 rounded-lg min-h-[80px] flex items-center">
+                                                {musicPrompt ? (
+                                                    <p className="text-gray-700 italic">"{musicPrompt}"</p>
+                                                ) : (
+                                                    <p className="text-gray-400 italic">Music description will be generated automatically from your story...</p>
+                                                )}
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">Music description is automatically generated based on your story content</p>
+                                        </div>
+
+                                        {/* Music Negative Prompt */}
+                                        <div className="md:col-span-2">
+                                            <label htmlFor="music-negative-prompt" className="block text-lg font-semibold mb-2 text-gray-700">Music Negative Prompt (Optional)</label>
+                                            <textarea
+                                                id="music-negative-prompt"
+                                                value={musicNegativePrompt}
+                                                onChange={(e) => setMusicNegativePrompt(e.target.value)}
+                                                placeholder="What you DON'T want in the music (e.g., 'vocals, drums, slow tempo')"
+                                                className="w-full p-3 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none transition-shadow resize-none"
+                                                rows={2}
+                                            />
+                                            <p className="text-xs text-gray-500 mt-1">Specify musical elements to avoid</p>
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
 

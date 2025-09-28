@@ -48,7 +48,12 @@ export const generateVideoForScene = async (
     globalBible: GlobalBible,
     prevScene: Scene | null,
     onPoll: (operation: any) => void,
-    videoModel: VideoModel
+    videoOptions: {
+        model: VideoModel;
+        feature: string;
+        resolution: string;
+        negativePrompt?: string;
+    }
 ): Promise<string> => {
 
     try {
@@ -68,7 +73,10 @@ export const generateVideoForScene = async (
                 characters,
                 globalBible,
                 prevScene,
-                videoModel,
+                videoModel: videoOptions.model,
+                videoFeature: videoOptions.feature,
+                resolution: videoOptions.resolution,
+                negativePrompt: videoOptions.negativePrompt,
             }),
         });
 
@@ -139,5 +147,33 @@ export const generateVideoForScene = async (
             throw new Error(`An unexpected error occurred during video generation: ${error.message}`);
         }
         throw new Error("An unknown error occurred during video generation.");
+    }
+};
+
+export const generateMusicDescriptionFromStory = async (story: string): Promise<string> => {
+    try {
+        const response = await fetch('/api/generateStory', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                prompt: `Analyze this story and generate a music description that would fit as background music. Focus on mood, tempo, instruments, and style. Return only the music description, nothing else.
+
+Story: ${story}
+
+Generate a music description like: "A mysterious orchestral piece with slow strings and haunting piano melodies" or "An upbeat folk song with acoustic guitar and light percussion"`
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to generate music description: ${response.status}`);
+        }
+
+        const result = await response.json();
+        return result.story || "A calm instrumental piece with gentle melodies";
+    } catch (error) {
+        console.error('Error generating music description:', error);
+        return "A calm instrumental piece with gentle melodies";
     }
 };

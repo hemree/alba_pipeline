@@ -1,13 +1,9 @@
 // Server-side endpoint for story breakdown
-import type { VercelRequest, VercelResponse } from '@vercel/node';
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method Not Allowed' });
-    }
+export async function POST(request: Request) {
 
     try {
-        const { story, characterDescriptions } = req.body;
+        const { story, characterDescriptions } = await request.json();
 
         const prompt = `
         Break down the following story into a sequence of distinct scenes, with a maximum of 50 scenes.
@@ -18,7 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
            - Mention how each scene connects to the previous one.
            - If a character appears again, use consistent naming and descriptions.
            - Keep environments visually consistent unless the story explicitly changes setting.
-        2. Use ONLY the provided characters: [${characterDescriptions.join(', ')}].
+        2. Use ONLY the provided characters: [${characterDescriptions ? characterDescriptions.join(', ') : 'No specific characters provided'}].
         3. For each scene, return structured JSON with:
            - scene_description: one sentence summary.
            - characters: list of character names from the provided list.
@@ -41,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             throw new Error("API key is not configured.");
         }
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -60,7 +56,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
 
         if (!response.ok) {
-            throw new Error(`API request failed with status ${response.status}`);
+            const statusCode = response.status || 'unknown';
+            throw new Error(`API request failed with status ${statusCode}`);
         }
 
         const data = await response.json();
@@ -77,13 +74,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const scenes = JSON.parse(jsonText);
         const limitedScenes = scenes.slice(0, 50); // Ensure max 50 scenes
 
-        return res.status(200).json(limitedScenes);
+        return new Response(JSON.stringify(limitedScenes), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+        });
 
     } catch (error) {
         console.error("Story breakdown error:", error);
         const message = error instanceof Error ? error.message : "The API request failed.";
-        return res.status(500).json({
+        return new Response(JSON.stringify({
             error: `Could not connect to the AI service: ${message}`
+        }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
         });
     }
 }

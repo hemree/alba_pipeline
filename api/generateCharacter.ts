@@ -3,6 +3,7 @@
 import { GoogleGenAI } from "@google/genai";
 
 interface GenerateCharacterRequest {
+    name?: string;
     genre?: string;
     style?: string;
     characterType?: string;
@@ -48,7 +49,7 @@ async function handleRequest(request: Request): Promise<Response> {
     }
 
     try {
-        const { genre, style, characterType, storyContext, existingCharacters } = await request.json() as GenerateCharacterRequest;
+        const { name, genre, style, characterType, storyContext, existingCharacters } = await request.json() as GenerateCharacterRequest;
 
         const apiKey = process.env.GEMINI_API_KEY;
         if (!apiKey) {
@@ -80,7 +81,7 @@ Return JSON format:
 Create a unique character:`;
 
         // Generate character description
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -92,8 +93,8 @@ Create a unique character:`;
                     }]
                 }],
                 generationConfig: {
-                    temperature: 0.8,
-                    maxOutputTokens: 1024,
+                    temperature: 0.7,
+                    maxOutputTokens: 2048,
                 }
             })
         });
@@ -105,10 +106,29 @@ Create a unique character:`;
         const data = await response.json();
         console.log('Character API Response:', JSON.stringify(data, null, 2));
 
-        const characterText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        const candidate = data.candidates?.[0];
+        const characterText = candidate?.content?.parts?.[0]?.text;
+        const finishReason = candidate?.finishReason;
 
         if (!characterText || !characterText.trim()) {
             console.error('Empty character response. Full data:', data);
+
+            // Handle MAX_TOKENS case
+            if (finishReason === 'MAX_TOKENS') {
+                // Create a fallback character
+                const fallbackCharacter = {
+                    name: name || 'Unknown Character',
+                    description: `A ${genre} character with ${style} aesthetic. This character plays an important role in the story.`,
+                    personality: 'A well-developed character with depth and complexity.',
+                    role: 'A significant character in the narrative.'
+                };
+
+                return new Response(JSON.stringify(fallbackCharacter), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            }
+
             throw new Error("AI model returned empty character description");
         }
 

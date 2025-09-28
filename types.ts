@@ -27,6 +27,6 @@ export interface VideoGenerationStatus {
     error: string | null;
 }
 
-export type VideoModel = 'veo-2.0-generate-001' | 'veo-3.0-generate-001';
+export type VideoModel = 'veo-2.0-generate-001' | 'veo-3.0-generate-001' | 'veo-3.0-fast-generate-001';
 
 export type AppStep = 'input' | 'review' | 'generate' | 'finalize';

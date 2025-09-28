@@ -123,6 +123,27 @@ app.post('/api/auth/token', async (req, res) => {
     }
 });
 
+// Music generation endpoints
+app.post('/api/generateMusic', async (req, res) => {
+    try {
+        const { default: generateMusicHandler } = await import('./api/generateMusic.ts');
+        generateMusicHandler(req, res);
+    } catch (error) {
+        console.error('Error loading generateMusic handler:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/downloadMusic', async (req, res) => {
+    try {
+        const { default: downloadMusicHandler } = await import('./api/downloadMusic.ts');
+        downloadMusicHandler(req, res);
+    } catch (error) {
+        console.error('Error loading downloadMusic handler:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
 // Health check
 app.get('/health', (req, res) => {
     res.json({ status: 'OK', timestamp: new Date().toISOString() });

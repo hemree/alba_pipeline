@@ -39,22 +39,26 @@ async function handleRequest(request: Request): Promise<Response> {
         }
 
         // Get Google Cloud credentials
-        const apiKey = process.env.GOOGLE_API_KEY;
+        const geminiApiKey = process.env.GEMINI_API_KEY;
 
-        if (!apiKey) {
-            return new Response(JSON.stringify({ error: 'Google API key not configured' }), {
+        if (!geminiApiKey) {
+            return new Response(JSON.stringify({
+                error: 'GEMINI_API_KEY not configured',
+                message: 'Please add your Gemini API key to .env.local'
+            }), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' },
             });
         }
 
+        console.log('Using Gemini API Key for operation polling');
+
         // Call Google Cloud Operations API to poll the operation status
         const response = await fetch(
-            `https://aiplatform.googleapis.com/v1/${operationName}`,
+            `https://aiplatform.googleapis.com/v1/${operationName}?key=${geminiApiKey}`,
             {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${apiKey}`,
                     'Content-Type': 'application/json',
                 },
             }
