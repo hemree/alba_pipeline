@@ -7,6 +7,7 @@ import { breakdownStoryIntoScenes, generateVideoForScene, generateMusicDescripti
 import { generateCharacterDescription } from '../services/characterDescriptorService';
 import { stitchVideos } from '../services/videoStitchingService';
 import type { GlobalBible } from '../services/continuityPromptBuilder';
+import { googleAuth } from '../services/googleAuth';
 import CharacterInput from './CharacterInput';
 import VideoPlayer from './VideoPlayer';
 import Spinner from './Spinner';
@@ -532,14 +533,36 @@ const VideoPipeline: React.FC = () => {
 
     const isGenerating = generatingDescriptions || videoStatuses.some((s: VideoGenerationStatus) => ['generating', 'polling'].includes(s.status)) || isStitching;
 
+    const handleLogout = () => {
+        googleAuth.signOut();
+        window.location.reload();
+    };
+
     return (
         <div className="min-h-screen bg-[#FDFBF6] text-gray-800 flex flex-col items-center p-4 sm:p-8 font-sans">
             <div className="w-full max-w-6xl mx-auto">
-                <header className="text-center mb-8">
+                <header className="text-center mb-8 relative">
+                    {/* Logout Button */}
+                    <div className="absolute top-0 right-0">
+                        <button
+                            onClick={handleLogout}
+                            className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white text-sm rounded-lg transition-colors"
+                        >
+                            Logout
+                        </button>
+                    </div>
+
                     <h1 className="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-500 to-pink-600">
                         Alba Media Video Pipeline
                     </h1>
                     <p className="text-gray-600 mt-2">Turn your stories into animated films.</p>
+
+                    {/* User Info */}
+                    {googleAuth.getCurrentUser() && (
+                        <p className="text-sm text-gray-500 mt-2">
+                            Welcome, {googleAuth.getCurrentUser()?.email}
+                        </p>
+                    )}
                 </header>
 
                 <StepIndicator currentStep={step} />

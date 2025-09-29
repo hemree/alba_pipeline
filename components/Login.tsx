@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Spinner from './Spinner';
 import { authService } from '../services/authService';
+import { googleAuth, GoogleUser } from '../services/googleAuth';
 
 // Array of high-quality, royalty-free background images
 const backgroundImages = [
@@ -30,18 +31,24 @@ const Login: React.FC<LoginProps> = ({ onLoginSuccess }) => {
     }, []);
 
     const handleLogin = async () => {
+        console.log('Login button clicked');
         setError('');
         setIsLoading(true);
 
         try {
-            const success = await authService.initializeAuth();
-            if (success) {
-                onLoginSuccess();
+            console.log('Starting Google sign in...');
+            const user = await googleAuth.signIn();
+            console.log('Google login successful:', user);
+            onLoginSuccess();
+        } catch (err: any) {
+            console.error('Google login failed:', err);
+            if (err.message === 'Email not whitelisted') {
+                setError('Your email is not authorized to access this application.');
+            } else if (err.message === 'Failed to load Google OAuth script') {
+                setError('Failed to load Google authentication. Please check your internet connection.');
             } else {
-                setError('Authentication failed. Please try again.');
+                setError(`Authentication failed: ${err.message}`);
             }
-        } catch (err) {
-            setError('Authentication failed. Please try again.');
         } finally {
             setIsLoading(false);
         }

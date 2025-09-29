@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { SessionProvider, useSession } from 'next-auth/react';
 import Login from './components/Login';
 import VideoPipeline from './components/VideoPipeline';
 import { authService } from './services/authService';
+import { googleAuth } from './services/googleAuth';
 
 const App: React.FC = () => {
     const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -11,8 +11,15 @@ const App: React.FC = () => {
 
     useEffect(() => {
         const initAuth = async () => {
-            const isAuthenticated = await authService.initializeAuth();
-            setIsAuthenticated(isAuthenticated);
+            // Check if user is already logged in with Google
+            const isGoogleAuth = googleAuth.isAuthenticated();
+            if (isGoogleAuth) {
+                setIsAuthenticated(true);
+            } else {
+                // Fallback to old auth service
+                const isAuthenticated = await authService.initializeAuth();
+                setIsAuthenticated(isAuthenticated);
+            }
             setIsLoading(false);
         };
 
@@ -38,13 +45,4 @@ const App: React.FC = () => {
     return <VideoPipeline />;
 };
 
-// Wrapper component with SessionProvider
-const AppWithAuth: React.FC = () => {
-    return (
-        <SessionProvider>
-            <App />
-        </SessionProvider>
-    );
-};
-
-export default AppWithAuth;
+export default App;
